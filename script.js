@@ -210,7 +210,7 @@ function saveAdHocTaskToGlass(btn, rowIndex) {
 }
 
 function toggleTaskInput(btn) { const r = btn.nextElementSibling; r.style.display = r.style.display === "none" ? "flex" : "none"; }
-function toggleChoreVisual(el, idx) { el.classList.toggle('done'); const c = el.querySelector('input[type="checkbox"]'); c.checked = !c.checked; }
+function toggleChoreVisual(el, idx) { el.classList.toggle('done'); const c = el.querySelector('input[type="checkbox"]'); c.checked = el.classList.contains('done'); }
 function openModal(id) { document.getElementById(id).classList.add('active'); }
 function closeModal(id) { document.getElementById(id).classList.remove('active'); }
 
