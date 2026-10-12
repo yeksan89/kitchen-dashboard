@@ -1,54 +1,56 @@
-:root {
-    --bg-gradient: linear-gradient(135deg, #07070a 0%, #0f0f1a 50%, #171320 100%);
-    --glass-bg: rgba(22, 22, 32, 0.65);
-    --glass-border: rgba(255, 255, 255, 0.04);
-    --text-primary: #ffffff;
-    --text-muted: #8d8d96;
-    --turkish-neon: #00d2d3;
-    --palestinian-neon: #ff4757;
-    --jordanian-neon: #ffa502;
-    --friday-emerald: #10ac84;
-    --color-user-a: #2e86de;
-    --color-user-e: #9b59b6;
+/* Paste at the END of style.css */
+
+/* Gradient title: add the standard property alongside the -webkit one */
+header h1 { background-clip: text; }
+
+/* Don't let the fixed bottom bar cover the last row of cards */
+.calendar-grid { padding-bottom: 90px; }
+
+/* Loading / error message spans the full grid */
+.loading-state { grid-column: 1 / -1; text-align: center; color: var(--text-muted); padding: 40px 0; }
+
+/* Prayer ribbon: wrap on small screens, style the name/time spans */
+.prayer-ribbon-container { flex-wrap: wrap; }
+.p-name { margin-right: 6px; }
+.p-time { color: var(--text-primary); }
+
+/* "standard" cuisine tag (the other three already exist) */
+.cuisine-tag.standard { background: rgba(255,255,255,0.05); color: var(--text-muted); border: 1px solid rgba(255,255,255,0.1); }
+
+/* Footer buttons */
+.btn-accent { border-color: var(--turkish-neon); color: var(--turkish-neon); }
+
+/* Modal text helpers */
+.text-center { text-align: center; }
+.modal-meta-row { color: var(--text-muted); font-family: sans-serif; font-size: 0.85rem; letter-spacing: 0.5px; margin-bottom: 20px; }
+.ingredients-list { list-style: none; padding: 0; line-height: 1.7; }   /* JS already adds the "•" */
+.instructions-steps { padding-left: 22px; line-height: 1.7; }
+.instructions-steps li { margin-bottom: 8px; }
+
+/* Grocery modal layout */
+.grocery-split-container { display: flex; gap: 30px; flex-wrap: wrap; }
+.grocery-list-side { flex: 1 1 320px; min-width: 0; }
+.qr-code-side { flex: 0 0 200px; }
+.qr-container-card { background: var(--glass-bg); border: 1px solid var(--glass-border); border-radius: 20px; padding: 20px; display: flex; flex-direction: column; align-items: center; }
+#qr-box img { background: #fff; padding: 8px; border-radius: 10px; margin-top: 10px; }
+
+/* Change of Plans buttons */
+.btn-block { display: block; width: 100%; margin-bottom: 12px; padding: 14px; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.1); border-radius: 14px; color: #fff; font-size: 1rem; font-family: serif; cursor: pointer; transition: 0.2s; }
+.btn-block:hover { background: rgba(255,255,255,0.1); }
+.mode-btn.highlight { border-color: var(--turkish-neon); color: var(--turkish-neon); }
+
+/* Nanny Nook form */
+.nanny-toggle-row { display: flex; gap: 10px; }
+.nanny-radio { flex: 1; text-align: center; padding: 10px; border: 1px solid rgba(255,255,255,0.1); border-radius: 12px; cursor: pointer; }
+.nanny-radio input { margin-right: 6px; }
+.nanny-radio:has(input:checked) { border-color: var(--friday-emerald); background: rgba(16,172,132,0.12); }
+.nanny-textarea { width: 100%; box-sizing: border-box; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; color: #fff; padding: 12px; font-family: inherit; font-size: 1rem; resize: vertical; }
+
+/* Phones */
+@media (max-width: 600px) {
+    body { padding: 15px; }
+    header h1 { font-size: 1.5rem; letter-spacing: 3px; }
+    .nanny-nook-anchor { position: static; display: block; margin: 10px auto 0; }
+    .control-bar { width: calc(100% - 30px); box-sizing: border-box; justify-content: center; padding: 8px 12px; gap: 8px; }
+    .btn { padding: 8px 12px; }
 }
-body { font-family: Garamond, Baskerville, serif; background: var(--bg-gradient); background-attachment: fixed; color: var(--text-primary); margin: 0; padding: 25px; min-height: 100vh; }
-header h1 { font-size: 2.4rem; font-weight: 300; letter-spacing: 6px; text-align: center; background: linear-gradient(45deg, var(--jordanian-neon), var(--palestinian-neon), var(--turkish-neon)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; margin-bottom: 2px; }
-.prayer-ribbon-container { background: rgba(10, 10, 15, 0.5); border: 1px solid rgba(255,255,255,0.03); padding: 10px; border-radius: 12px; display: flex; justify-content: center; gap: 25px; max-width: 1200px; margin: 15px auto 30px auto; font-size: 0.95rem; letter-spacing: 1px; }
-.prayer-time-node { color: var(--text-muted); }
-.calendar-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(290px, 1fr)); gap: 25px; max-width: 1600px; margin: 20px auto; }
-.day-card { background: var(--glass-bg); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); border: 1px solid var(--glass-border); border-radius: 24px; padding: 22px; box-shadow: 0 15px 35px rgba(0,0,0,0.6); }
-.day-card.today { border-color: rgba(255,255,255,0.12); background: rgba(28, 28, 42, 0.75); box-shadow: 0 0 25px rgba(255,255,255,0.03); }
-.day-card[data-day="Friday"] { border-color: rgba(16, 172, 132, 0.25); background-image: radial-gradient(rgba(16, 172, 132, 0.07) 15%, transparent 16%), radial-gradient(rgba(16, 172, 132, 0.04) 15%, transparent 16%), linear-gradient(45deg, transparent 49%, rgba(16, 172, 132, 0.03) 50%, transparent 51%), linear-gradient(-45deg, transparent 49%, rgba(16, 172, 132, 0.03) 50%, transparent 51%); background-size: 28px 28px, 28px 28px, 56px 56px, 56px 56px; background-position: 0 0, 14px 14px, 0 0, 0 0; }
-.day-card[data-day="Friday"] .day-name { color: var(--friday-emerald); }
-.day-name { font-size: 1.6rem; font-weight: 300; border-bottom: 1px solid rgba(255,255,255,0.06); padding-bottom: 5px; margin-bottom: 15px; }
-.cuisine-tag { display: inline-block; font-size: 0.65rem; font-weight: bold; text-transform: uppercase; padding: 2px 8px; border-radius: 4px; letter-spacing: 1.5px; margin-bottom: 10px; }
-.cuisine-tag.turkish { background: rgba(0,210,211,0.08); color: var(--turkish-neon); border: 1px solid rgba(0,210,211,0.15); }
-.cuisine-tag.palestinian { background: rgba(255,71,87,0.08); color: var(--palestinian-neon); border: 1px solid rgba(255,71,87,0.15); }
-.cuisine-tag.jordanian { background: rgba(255,165,2,0.08); color: var(--jordanian-neon); border: 1px solid rgba(255,165,2,0.15); }
-.meal-title { font-size: 1.25rem; font-weight: 400; margin: 0 0 12px 0; min-height: 50px; cursor: pointer; }
-.meta-metrics-row { display: flex; gap: 15px; font-size: 0.8rem; color: var(--text-muted); text-transform: uppercase; font-family: sans-serif; letter-spacing: 0.5px; }
-.chore-box { background: rgba(255,255,255,0.01); border: 1px solid rgba(255,255,255,0.03); padding: 12px; border-radius: 14px; margin-top: 15px; display: flex; align-items: flex-start; cursor: pointer; }
-.chore-box input[type="checkbox"] { -webkit-appearance: none; appearance: none; width: 18px; height: 18px; border: 1px solid var(--text-muted); border-radius: 50%; margin-right: 12px; outline: none; margin-top: 4px; transition: 0.2s ease; }
-.chore-box input[type="checkbox"]:checked { background: #10ac84; border-color: #10ac84; box-shadow: 0 0 8px rgba(16,172,132,0.4); }
-.chores-list-sub-container { display: flex; flex-direction: column; gap: 8px; width: 100%; }
-.single-chore-row-item { display: flex; align-items: center; gap: 10px; }
-.user-badge-profile { display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px; border-radius: 50%; font-size: 0.65rem; font-weight: bold; font-family: sans-serif; color: #fff; }
-.user-badge-profile.owner-a { background: var(--color-user-a); box-shadow: 0 0 6px rgba(46,134,222,0.3); }
-.user-badge-profile.owner-e { background: var(--color-user-e); box-shadow: 0 0 6px rgba(155,89,182,0.3); }
-.user-badge-profile.unassigned { background: rgba(255,255,255,0.1); color: var(--text-muted); }
-.chore-row-text-string { font-size: 1rem; font-weight: 300; }
-.chore-box.done .chore-row-text-string { text-decoration: line-through; color: rgba(255,255,255,0.15); }
-.add-task-container { margin-top: 8px; }
-.add-task-inline-btn { background: transparent; border: none; color: var(--text-muted); font-size: 0.75rem; letter-spacing: 1px; cursor: pointer; text-transform: uppercase; padding: 0; }
-.task-input-hidden-row { display: flex; margin-top: 6px; gap: 5px; }
-.task-text-field { background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.06); padding: 5px 10px; border-radius: 8px; color: #fff; font-size: 0.85rem; width: 100%; }
-.task-input-hidden-row button { background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.06); border-radius: 8px; color:#fff; cursor:pointer; }
-.control-bar { position: fixed; bottom: 25px; left: 50%; transform: translateX(-50%); background: rgba(14,14,22,0.85); backdrop-filter: blur(25px); -webkit-backdrop-filter: blur(25px); padding: 8px 24px; border-radius: 40px; border: 1px solid rgba(255,255,255,0.04); display: flex; gap: 15px; box-shadow: 0 10px 30px rgba(0,0,0,0.8); }
-.btn { background: transparent; color: var(--text-primary); border: 1px solid rgba(255,255,255,0.15); padding: 8px 20px; border-radius: 30px; font-size: 0.85rem; letter-spacing: 1px; cursor: pointer; transition: 0.2s; font-family: serif; }
-.btn:hover { background: #fff; color: #000; }
-.modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); backdrop-filter: blur(8px); display: flex; align-items: center; justify-content: center; visibility: hidden; opacity: 0; transition: all 0.3s ease; z-index: 1000; }
-.modal-overlay.active { visibility: visible; opacity: 1; }
-.modal-content { background: rgba(20,20,28,0.92); border: 1px solid rgba(255,255,255,0.08); border-radius: 28px; width: 90%; max-width: 800px; padding: 30px; position: relative; max-height: 85vh; overflow-y: auto; box-shadow: 0 20px 50px rgba(0,0,0,0.9); }
-.modal-close { position: absolute; top: 20px; right: 20px; background: transparent; border: none; color: #fff; cursor: pointer; font-size: 1rem; font-family: serif; }
-.modal-header-text { font-size: 2rem; font-weight: 300; margin-top: 0; letter-spacing: 2px; }
-.nanny-nook-anchor { position: absolute; top: 25px; right: 25px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); padding: 6px 15px; border-radius: 20px; color: #fff; cursor: pointer; }
