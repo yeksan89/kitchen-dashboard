@@ -53,7 +53,7 @@ function apply(p) {
     if (p.error) { $('calendar').innerHTML = `<div class="loading-state" style="color:#ff4757">${esc(p.error)}</div>`; return; }
     S = p;
     S.state.done = S.state.done || {}; S.state.have = S.state.have || {}; S.state.extra = S.state.extra || {};
-    render();
+    ();
 }
 
 function parseChores(i) {
@@ -90,7 +90,7 @@ function render() {
         }).join('');
         return `<div class="day-card ${d.day.toLowerCase() === today.toLowerCase() ? 'today' : ''}" data-day="${esc(d.day)}">
             <div class="day-name">${esc(d.day)}${d.day.toLowerCase() === today.toLowerCase() ? ' 📍' : ''}</div>
-            <div class="meal-section" onclick="viewRecipeModal(${i})">
+            <div class="meal-section" style="cursor:pointer;">
                 <span class="cuisine-tag ${cuisine}">${esc(cuisine)}</span>
                 <p class="meal-title">${esc(d.meal || 'No meal planned')}</p>
                 <div class="meta-metrics-row"><span>⏱️ ${esc(d.cook_time)}m</span><span>💰 $${esc(d.cost)}</span><span>🔥 ${esc(d.calories)}c</span></div>
