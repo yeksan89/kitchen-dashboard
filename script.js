@@ -1,5 +1,5 @@
 // 🔗 PASTE YOUR COPIED GOOGLE SHEET ADDRESS LINK HERE:
-const SHEET_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQLvzax00sfU8TVEFGJmgFtJ_5WguktelQ6o4bd3EjDtJoh2C1g0lBwHfRt6HjCDdXkrddzOyvZ3Zxz/pubhtml";
+const SHEET_URL = "https://google.com";
 
 function getSheetId(url) {
     const matches = url.match(/\/d\/([^/]+)/);
