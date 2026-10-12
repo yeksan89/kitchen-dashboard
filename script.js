@@ -1,3 +1,11 @@
+// Shows any JavaScript error as a red bar at the top (handy on iPad where there's no console)
+window.addEventListener('error', function (e) {
+    var b = document.createElement('div');
+    b.style.cssText = 'position:fixed;top:0;left:0;right:0;background:#c2493d;color:#fff;padding:6px 10px;z-index:9999;font:12px sans-serif';
+    b.textContent = 'JS error: ' + e.message + ' (line ' + e.lineno + ')';
+    document.body.appendChild(b);
+});
+
 // Paste your Apps Script web app URL (ends in /exec) and the same API_TOKEN you set in Script Properties
 const API_URL = "https://script.google.com/macros/s/AKfycby22iQbRixzFcgAMNgiLNHwp8m2isit6wQdpVyhgWsdz_1_eeqBeY5S6yx83TF5XRO0/exec";
 const TOKEN = "587c5f3d07d5872b661e077c122fba72";
@@ -6,7 +14,11 @@ let S = { days: [], ribbon: '', state: { done: {}, have: {}, extra: {} } };
 const $ = id => document.getElementById(id);
 const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
-const splitItems = str => String(str || '').split(',').map(s => s.trim()).filter(Boolean);
+// Lists from the sheet are newline-separated; fall back to commas (outside parentheses) for older data
+const splitItems = str => {
+    const s = String(str || '');
+    return (s.indexOf('\n') !== -1 ? s.split('\n') : s.split(/,(?![^(]*\))/)).map(x => x.trim()).filter(Boolean);
+};
 
 // XHR wrapper for iOS 15 compatibility with Google Apps Script redirects
 function apiGet(url) {
@@ -62,7 +74,7 @@ function parseChores(i) {
     String(d.chore || '').split('|').forEach(raw => {
         const owner = raw.includes('[A]') ? 'A' : raw.includes('[E]') ? 'E' : '';
         const text = raw.replace('[A]', '').replace('[E]', '').trim();
-        if (!text || seen.has(text.toLowerCase())) return;       
+        if (!text || seen.has(text.toLowerCase())) return;
         seen.add(text.toLowerCase());
         tasks.push({ text, owner });
     });
@@ -88,9 +100,10 @@ function render() {
                 <span class="user-badge-profile ${cls}">${t.owner || '•'}</span>
                 <span class="chore-row-text-string" style="${done ? 'text-decoration:line-through;opacity:.4' : ''}">${esc(t.text)}</span></label>`;
         }).join('');
+        // onclick attribute makes the card tappable on iOS; the delegated handler below is a backup (opening is idempotent)
         return `<div class="day-card ${d.day.toLowerCase() === today.toLowerCase() ? 'today' : ''}" data-day="${esc(d.day)}">
             <div class="day-name">${esc(d.day)}${d.day.toLowerCase() === today.toLowerCase() ? ' 📍' : ''}</div>
-            <div class="meal-section" style="cursor:pointer;">
+            <div class="meal-section" style="cursor:pointer;" onclick="viewRecipeModal(${i})">
                 <span class="cuisine-tag ${cuisine}">${esc(cuisine)}</span>
                 <p class="meal-title">${esc(d.meal || 'No meal planned')}</p>
                 <div class="meta-metrics-row"><span>⏱️ ${esc(d.cook_time)}m</span><span>💰 $${esc(d.cost)}</span><span>🔥 ${esc(d.calories)}c</span></div>
@@ -139,8 +152,8 @@ function refreshQR() {
 async function shareList() {
     const text = 'Grocery list:\n' + missingItems().map(i => '- ' + i).join('\n');
     if (navigator.share) { try { await navigator.share({ text }); return; } catch (e) { /* cancelled */ } }
-    await navigator.clipboard.writeText(text);
-    alert('Copied the missing items to your clipboard.');
+    try { await navigator.clipboard.writeText(text); alert('Copied the missing items to your clipboard.'); }
+    catch (e) { alert(text); }
 }
 
 document.addEventListener('change', e => {
@@ -201,7 +214,7 @@ function renderPlans() {
     $('plan-swap').value = Math.min(todayIdx + 1, S.days.length - 1);
 }
 async function plan(action) {
-    const day = +$('plan-day').value, b = +$('plan-swap').value, st =$('plan-status');
+    const day = +$('plan-day').value, b = +$('plan-swap').value, st = $('plan-status');
     if (action === 'swap' && day === b) { st.innerText = 'Pick two different days.'; return; }
     st.innerText = action === 'newDish' ? '✨ Asking Gemini for a fresh idea…' : 'Updating…';
     try {
@@ -231,24 +244,16 @@ function toggleTaskInput(btn) { const r = btn.nextElementSibling; r.style.displa
 function openModal(id) { $(id).classList.add('active'); }
 function closeModal(id) { $(id).classList.remove('active'); }
 
-/* ---------- Unified Click Delegation for iOS Standalone & Web ---------- */
+// Backup for the recipe cards (opening a recipe twice is harmless).
+// NOTE: the "+ Add Task" button is NOT handled here anymore; its inline onclick plus a second handler here
+// toggled the input twice, so it never appeared.
 document.addEventListener('click', e => {
-    const mealCard = e.target.closest('.meal-section');
-    if (mealCard) {
-        const dayCard = mealCard.closest('.day-card');
-        if (dayCard) {
-            const dayName = dayCard.dataset.day;
-            const index = S.days.findIndex(d => String(d.day).toLowerCase() === String(dayName).toLowerCase());
-            if (index !== -1) viewRecipeModal(index);
-        }
-        return;
-    }
-    const addTaskBtn = e.target.closest('.add-task-inline-btn');
-    if (addTaskBtn) {
-        const r = addTaskBtn.nextElementSibling;
-        if (r) r.style.display = r.style.display === "none" ? "flex" : "none";
-        return;
-    }
+    const mealCard = e.target.closest ? e.target.closest('.meal-section') : null;
+    if (!mealCard) return;
+    const dayCard = mealCard.closest('.day-card');
+    if (!dayCard) return;
+    const index = S.days.findIndex(d => String(d.day).toLowerCase() === String(dayCard.dataset.day).toLowerCase());
+    if (index !== -1) viewRecipeModal(index);
 });
 
 const nannyBtn = document.querySelector('#nanny-modal .btn-block');
