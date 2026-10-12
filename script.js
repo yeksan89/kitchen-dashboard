@@ -5,8 +5,8 @@ const TOKEN = "587c5f3d07d5872b661e077c122fba72";
 let S = { days: [], ribbon: '', state: { done: {}, have: {}, extra: {} } };
 const $ = id => document.getElementById(id);
 const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-const splitItems = str => String(str || '').split(/\n|,(?![^(]*\))/).map(s => s.trim()).filter(Boolean);
 
+const splitItems = str => String(str || '').split(',').map(s => s.trim()).filter(Boolean);
 async function load() {
     try {
         const r = await fetch(API_URL + '?token=' + encodeURIComponent(TOKEN));
