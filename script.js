@@ -53,7 +53,7 @@ function apply(p) {
     if (p.error) { $('calendar').innerHTML = `<div class="loading-state" style="color:#ff4757">${esc(p.error)}</div>`; return; }
     S = p;
     S.state.done = S.state.done || {}; S.state.have = S.state.have || {}; S.state.extra = S.state.extra || {};
-    ();
+    render();
 }
 
 function parseChores(i) {
@@ -143,28 +143,16 @@ async function shareList() {
     alert('Copied the missing items to your clipboard.');
 }
 
-
-document.addEventListener('click', e => {
-    // 1. Handle Recipe Clicks on Meal Cards
-    const mealCard = e.target.closest('.meal-section');
-    if (mealCard) {
-        // Find the day index from the parent day-card
-        const dayCard = mealCard.closest('.day-card');
-        if (dayCard) {
-            const dayName = dayCard.dataset.day;
-            const index = S.days.findIndex(d => String(d.day).toLowerCase() === String(dayName).toLowerCase());
-            if (index !== -1) viewRecipeModal(index);
-        }
-        return;
-    }
-
-    // 2. Handle Add Task Toggle Button
-    const addTaskBtn = e.target.closest('.add-task-inline-btn');
-    if (addTaskBtn) {
-        const r = addTaskBtn.nextElementSibling;
-        if (r) r.style.display = r.style.display === "none" ? "flex" : "none";
-        return;
-    }
+document.addEventListener('change', e => {
+    const k = e.target.dataset && e.target.dataset.k;
+    if (!k) return;
+    const on = e.target.checked, grocery = k.startsWith('g:');
+    (grocery ? S.state.have : S.state.done)[k] = on;
+    const el = grocery ? e.target.closest('label') : e.target.closest('label').querySelector('.chore-row-text-string');
+    el.style.textDecoration = on ? 'line-through' : 'none';
+    el.style.opacity = on ? '.4' : '1';
+    if (grocery) refreshQR();
+    api({ action: grocery ? 'have' : 'toggle', key: k, value: on });
 });
 
 function addTask(btn, i) {
@@ -242,6 +230,26 @@ async function saveNanny() {
 function toggleTaskInput(btn) { const r = btn.nextElementSibling; r.style.display = r.style.display === "none" ? "flex" : "none"; }
 function openModal(id) { $(id).classList.add('active'); }
 function closeModal(id) { $(id).classList.remove('active'); }
+
+/* ---------- Unified Click Delegation for iOS Standalone & Web ---------- */
+document.addEventListener('click', e => {
+    const mealCard = e.target.closest('.meal-section');
+    if (mealCard) {
+        const dayCard = mealCard.closest('.day-card');
+        if (dayCard) {
+            const dayName = dayCard.dataset.day;
+            const index = S.days.findIndex(d => String(d.day).toLowerCase() === String(dayName).toLowerCase());
+            if (index !== -1) viewRecipeModal(index);
+        }
+        return;
+    }
+    const addTaskBtn = e.target.closest('.add-task-inline-btn');
+    if (addTaskBtn) {
+        const r = addTaskBtn.nextElementSibling;
+        if (r) r.style.display = r.style.display === "none" ? "flex" : "none";
+        return;
+    }
+});
 
 const nannyBtn = document.querySelector('#nanny-modal .btn-block');
 if (nannyBtn) nannyBtn.onclick = saveNanny;
