@@ -1,5 +1,5 @@
 // Paste your Apps Script web app URL (ends in /exec) and the same API_TOKEN you set in Script Properties
-const API_URL = "https://script.google.com/macros/s/AKfycbyLUWEBUYP-aN90nhQ0APq0l8c3EIRmcqshkz3vXZOcEgyeueNzTCs6MkhQUnSZw401/exec";
+const API_URL = "https://script.google.com/macros/s/AKfycby22iQbRixzFcgAMNgiLNHwp8m2isit6wQdpVyhgWsdz_1_eeqBeY5S6yx83TF5XRO0/exec";
 const TOKEN = "587c5f3d07d5872b661e077c122fba72";
 
 let S = { days: [], ribbon: '', state: { done: {}, have: {}, extra: {} } };
