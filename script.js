@@ -1,217 +1,208 @@
-// 🔗 YOUR MASTER SPREADSHEET URL (sheet must be shared: "Anyone with the link can view"):
-const SHEET_URL = "https://docs.google.com/spreadsheets/d/18XothmKmHTmP0Z80ovk3sfIL2BB4Jjfdv47ctW8sW2A/edit?gid=0#gid=0";
+// Paste your Apps Script web app URL (ends in /exec) and the same API_TOKEN you set in Script Properties
+const API_URL = "https://script.google.com/macros/s/AKfycbyLUWEBUYP-aN90nhQ0APq0l8c3EIRmcqshkz3vXZOcEgyeueNzTCs6MkhQUnSZw401/exec";
+const TOKEN = "587c5f3d07d5872b661e077c122fba72";
 
-// Dashboard tab layout (matches the Apps Script):
-// A=Day  B=Meal  C=Cuisine  D=CookTime  E=Cost  F=Calories  G=Macros  H=Chores  I=Done  J=Ingredients+Steps  K=Grocery
-// Row 1 = headers, rows 2-8 = Monday-Sunday, B10 = prayer ribbon
+let S = { days: [], ribbon: '', state: { done: {}, have: {}, extra: {} } };
+const $ = id => document.getElementById(id);
+const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const splitItems = str => String(str || '').split(/\n|,(?![^(]*\))/).map(s => s.trim()).filter(Boolean);
 
-function getSheetId(url) {
-    const m = url.match(/\/d\/([^/]+)/);
-    return m ? m[1] : null;          // FIX: return the captured ID, not the whole match array
-}
-
-let loadedDataCache = [];
-
-function esc(s) {
-    return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-}
-
-// Splits on newlines or commas (ignoring commas inside parentheses)
-function splitItems(str) {
-    return String(str).split(/\n|,(?![^(]*\))/).map(s => s.trim()).filter(Boolean);
-}
-
-// FIX: real CSV parser. Cells contain line breaks and commas (ingredients, steps, groceries),
-// so splitting on "\n" and "," breaks rows apart.
-function parseCSV(text) {
-    const rows = [];
-    let row = [], cell = '', inQuotes = false;
-    for (let i = 0; i < text.length; i++) {
-        const ch = text[i];
-        if (inQuotes) {
-            if (ch === '"') {
-                if (text[i + 1] === '"') { cell += '"'; i++; }
-                else inQuotes = false;
-            } else cell += ch;
-        } else if (ch === '"') {
-            inQuotes = true;
-        } else if (ch === ',') {
-            row.push(cell); cell = '';
-        } else if (ch === '\n' || ch === '\r') {
-            if (ch === '\r' && text[i + 1] === '\n') i++;
-            row.push(cell); rows.push(row); row = []; cell = '';
-        } else {
-            cell += ch;
-        }
-    }
-    if (cell !== '' || row.length) { row.push(cell); rows.push(row); }
-    return rows.map(r => r.map(c => c.trim()));
-}
-
-async function fetchDashboardData() {
-    const calendar = document.getElementById('calendar');
-    const sheetId = getSheetId(SHEET_URL);
-    if (!sheetId) {
-        calendar.innerHTML = '<div class="loading-state" style="color:#ff4757; text-align:center;">Error parsing Sheet URL ID.</div>';
-        return;
-    }
-    // FIX: correct gviz endpoint; headers=1 forces row 1 to be treated as the header row
-    const csvUrl = `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:csv&sheet=Dashboard&headers=1`;
+async function load() {
     try {
-        const response = await fetch(csvUrl);
-        if (!response.ok) throw new Error('HTTP ' + response.status);
-        processRows(await response.text());
-    } catch (error) {
-        console.error("Sheet sync failure:", error);
-        calendar.innerHTML = '<div class="loading-state" style="color:#ff4757; text-align:center;">Could not load the sheet. Check that it is shared as "Anyone with the link can view".</div>';
+        const r = await fetch(API_URL + '?token=' + encodeURIComponent(TOKEN));
+        apply(await r.json());
+    } catch (e) {
+        $('calendar').innerHTML = '<div class="loading-state" style="color:#ff4757">Could not reach the kitchen database. Check API_URL and TOKEN.</div>';
     }
 }
-
-function processRows(csvText) {
-    const rows = parseCSV(csvText);
-    loadedDataCache = rows.slice(1);   // drop header row; index 0 = Monday (sheet row 2)
-
-    // Prayer ribbon (written to B10 by the Apps Script): find it by content, not by fixed position
-    const ribbonRow = loadedDataCache.find(r => r.some(c => c.includes('Fajr')));
-    if (ribbonRow) parsePrayerRibbon(ribbonRow.find(c => c.includes('Fajr')));
-
-    renderDashboard();
+async function api(body) {
+    const r = await fetch(API_URL, { method: 'POST', body: JSON.stringify({ token: TOKEN, ...body }) });
+    return r.json();
+}
+function apply(p) {
+    if (p.error) { $('calendar').innerHTML = `<div class="loading-state" style="color:#ff4757">${esc(p.error)}</div>`; return; }
+    S = p;
+    S.state.done = S.state.done || {}; S.state.have = S.state.have || {}; S.state.extra = S.state.extra || {};
+    render();
 }
 
-function parsePrayerRibbon(ribbonText) {
-    const ribbonContainer = document.getElementById('prayer-ribbon-content');
-    if (!ribbonText || !ribbonContainer) return;
-    ribbonContainer.innerHTML = "";
-    ribbonText.split('|').forEach(block => {
-        const parts = block.trim().split(/\s+/);
-        if (parts.length === 2) {
-            ribbonContainer.innerHTML += `
-                <div class="prayer-time-node">
-                    <span class="p-name">◯ ${esc(parts[0])}</span>
-                    <span class="p-time">${esc(parts[1])}</span>
-                </div>`;
-        }
+function parseChores(i) {
+    const d = S.days[i];
+    const seen = new Set(), tasks = [];
+    String(d.chore || '').split('|').forEach(raw => {
+        const owner = raw.includes('[A]') ? 'A' : raw.includes('[E]') ? 'E' : '';
+        const text = raw.replace('[A]', '').replace('[E]', '').trim();
+        if (!text || seen.has(text.toLowerCase())) return;       // never list the same task twice
+        seen.add(text.toLowerCase());
+        tasks.push({ text, owner });
     });
+    (S.state.extra[i] || []).forEach(t => tasks.push({ text: t, owner: '' }));
+    return tasks;
 }
 
-function renderDashboard() {
-    const calendarContainer = document.getElementById('calendar');
-    const todayName = new Date().toLocaleDateString('en-US', { weekday: 'long' });
-    document.getElementById('current-date').innerText = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' });
-
-    const cards = [];
-    let groceryMasterAccumulator = "";
-
-    loadedDataCache.forEach((row, index) => {
-        if (index > 6) return; // only the 7 calendar days
-
-        const day = row[0];
-        if (!day) return;
-
-        const mealName = row[1] || "No meal planned";
-        const cuisine = (row[2] || "standard").toLowerCase().replace(/[^a-z]/g, '') || "standard";
-        const cookTime = row[3] || "0";
-        const cost = row[4] || "0.00";
-        const calories = row[5] || "0";
-        const macros = row[6] || "";
-        const choreText = row[7] || "No chores allocated";
-        const isChoreDone = String(row[8]).toLowerCase() === "true";   // FIX: Sheets CSV returns "true"/"false"
-        const groceriesData = row[10] || "";
-
-        if (groceriesData) {
-            groceryMasterAccumulator += `
-                <div class="grocery-itemized-block" style="margin-bottom:20px; border-bottom:1px solid rgba(255,255,255,0.05); padding-bottom:15px;">
-                    <h4 style="margin:0 0 5px 0;">${esc(day.toUpperCase())} | ${esc(mealName)} <span style="color:var(--turkish-neon);">⏱️ ${esc(cookTime)}m</span></h4>
-                    <p style="color:var(--text-muted); font-size:0.85rem; margin:0 0 10px 0;">Est Cost: $${esc(cost)} | ${esc(calories)} cal (${esc(macros)})</p>
-                    <ul style="list-style:none; padding:0; margin:0;">${splitItems(groceriesData).map(i => `<li>• ${esc(i)}</li>`).join('')}</ul>
-                </div>`;
-        }
-
-        const isToday = day.toLowerCase() === todayName.toLowerCase() ? 'today' : '';
-
-        let stylizedChoreHTML = "";
-        choreText.split('|').forEach(singleChore => {
-            let badgeClass = "unassigned";
-            let initials = "";
-            if (singleChore.includes("[A]")) { badgeClass = "owner-a"; initials = "A"; }
-            else if (singleChore.includes("[E]")) { badgeClass = "owner-e"; initials = "E"; }
-            const cleanChore = singleChore.replace("[A]", "").replace("[E]", "").trim();
-            if (cleanChore) {
-                stylizedChoreHTML += `
-                    <div class="single-chore-row-item" style="margin-bottom:6px; display:flex; align-items:center; gap:8px;">
-                        <span class="user-badge-profile ${badgeClass}">${initials || "•"}</span>
-                        <span class="chore-row-text-string">${esc(cleanChore)}</span>
-                    </div>`;
-            }
-        });
-
-        cards.push(`
-            <div class="day-card ${isToday}" data-day="${esc(day)}">
-                <div class="day-name">${esc(day)} ${isToday ? '<span>📍</span>' : ''}</div>
-                <div class="meal-section" onclick="viewRecipeModal(${index})">
-                    <span class="cuisine-tag ${cuisine}">${esc(cuisine)}</span>
-                    <p class="meal-title">${esc(mealName)}</p>
-                    <div class="meta-metrics-row"><span>⏱️ ${esc(cookTime)}m</span><span>💰 $${esc(cost)}</span><span>🔥 ${esc(calories)}c</span></div>
-                </div>
-                <div class="chore-section">
-                    <div class="chore-box ${isChoreDone ? 'done' : ''}" onclick="toggleChoreVisual(this, ${index})">
-                        <input type="checkbox" ${isChoreDone ? 'checked' : ''}>
-                        <div class="chores-list-sub-container">${stylizedChoreHTML}</div>
-                    </div>
-                    <div class="add-task-container">
-                        <button class="add-task-inline-btn" onclick="toggleTaskInput(this)">+ Add Task</button>
-                        <div class="task-input-hidden-row" style="display:none;">
-                            <input type="text" class="task-text-field">
-                            <button onclick="saveAdHocTaskToGlass(this, ${index})">➕</button>
-                        </div>
-                    </div>
-                </div>
-            </div>`);
-    });
-
-    calendarContainer.innerHTML = cards.join('');
-    document.getElementById('grocery-master-content').innerHTML = groceryMasterAccumulator || "<p>No active shopping list data synced.</p>";
-    // FIX: correct QR endpoint
-    document.getElementById('qr-box').innerHTML =
-        `<img src="https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(SHEET_URL)}" alt="QR">`;
-}
-
-function viewRecipeModal(index) {
-    const row = loadedDataCache[index];
-    if (!row) return;
-    document.getElementById('modal-recipe-title').innerText = row[1];
-    document.getElementById('modal-recipe-meta').innerText = `${row[0].toUpperCase()} | ⏱️ ${row[3]}m | 💰 $${row[4]} | 🔥 ${row[5]} cal (${row[6]})`;
-
-    const rawData = row[9] || "";
-    let ingList = ["Check grocery list."];
-    let stepList = ["Cook standard form."];
-    if (rawData.includes("STEPS:")) {
-        const [ingPart, stepsPart = ""] = rawData.replace("INGREDIENTS:", "").split("STEPS:");
-        ingList = splitItems(ingPart);
-        // FIX: don't split on every "." (breaks "1.5 cups"); drop "Step N." labels, split on sentence ends
-        stepList = stepsPart.replace(/Step\s*\d+[.:]\s*/gi, '').split(/(?<=[.!?])\s+/).map(s => s.trim()).filter(Boolean);
+function render() {
+    const today = new Date().toLocaleDateString('en-US', { weekday: 'long' });
+    $('current-date').innerText = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' });
+    const ribbon = $('prayer-ribbon-content');
+    if (S.ribbon.includes('Fajr')) {
+        ribbon.innerHTML = S.ribbon.split('|').map(b => b.trim().split(/\s+/)).filter(p => p.length === 2)
+            .map(p => `<div class="prayer-time-node"><span class="p-name">◯ ${esc(p[0])}</span><span class="p-time">${esc(p[1])}</span></div>`).join('');
     }
-    document.getElementById('modal-recipe-ingredients').innerHTML = ingList.map(i => `<li>• ${esc(i)}</li>`).join('');
-    document.getElementById('modal-recipe-steps').innerHTML = stepList.map(s => `<li>${esc(s)}</li>`).join('');
+    $('calendar').innerHTML = S.days.map((d, i) => {
+        if (!d.day) return '';
+        const cuisine = String(d.cuisine || 'standard').toLowerCase().replace(/[^a-z]/g, '') || 'standard';
+        const tasks = parseChores(i).map(t => {
+            const k = `c:${i}:${t.text.toLowerCase()}`, done = !!S.state.done[k];
+            const cls = t.owner === 'A' ? 'owner-a' : t.owner === 'E' ? 'owner-e' : 'unassigned';
+            return `<label class="single-chore-row-item"><input type="checkbox" data-k="${esc(k)}" ${done ? 'checked' : ''}>
+                <span class="user-badge-profile ${cls}">${t.owner || '•'}</span>
+                <span class="chore-row-text-string" style="${done ? 'text-decoration:line-through;opacity:.4' : ''}">${esc(t.text)}</span></label>`;
+        }).join('');
+        return `<div class="day-card ${d.day.toLowerCase() === today.toLowerCase() ? 'today' : ''}" data-day="${esc(d.day)}">
+            <div class="day-name">${esc(d.day)}${d.day.toLowerCase() === today.toLowerCase() ? ' 📍' : ''}</div>
+            <div class="meal-section" onclick="viewRecipeModal(${i})">
+                <span class="cuisine-tag ${cuisine}">${esc(cuisine)}</span>
+                <p class="meal-title">${esc(d.meal || 'No meal planned')}</p>
+                <div class="meta-metrics-row"><span>⏱️ ${esc(d.cook_time)}m</span><span>💰 $${esc(d.cost)}</span><span>🔥 ${esc(d.calories)}c</span></div>
+            </div>
+            <div class="chore-section"><div class="chore-box"><div class="chores-list-sub-container">${tasks}</div></div>
+                <div class="add-task-container">
+                    <button class="add-task-inline-btn" onclick="toggleTaskInput(this)">+ Add Task</button>
+                    <div class="task-input-hidden-row" style="display:none;"><input type="text" class="task-text-field"><button onclick="addTask(this, ${i})">➕</button></div>
+                </div></div></div>`;
+    }).join('');
+    renderGrocery();
+    renderPlans();
+}
+
+/* ---------- Grocery: tick what you already have; only the rest goes to the phone ---------- */
+function renderGrocery() {
+    let html = '';
+    S.days.forEach((d, i) => {
+        const items = splitItems(d.grocery);
+        if (!items.length) return;
+        html += `<div class="grocery-itemized-block" style="margin-bottom:20px"><h4 style="margin:0 0 8px">${esc(String(d.day).toUpperCase())} | ${esc(d.meal)}</h4>` +
+            items.map((it, j) => {
+                const k = `g:${i}:${j}`, have = !!S.state.have[k];
+                return `<label class="grocery-row" style="display:flex;gap:10px;align-items:center;margin:4px 0;cursor:pointer;${have ? 'text-decoration:line-through;opacity:.4' : ''}">
+                    <input type="checkbox" data-k="${esc(k)}" data-item="${esc(it)}" ${have ? 'checked' : ''}> <span>${esc(it)}</span></label>`;
+            }).join('') + '</div>';
+    });
+    $('grocery-master-content').innerHTML = (html ? '<p style="color:var(--text-muted);font-size:.85rem">Tick what you already have at home.</p>' : '') + (html || '<p>No active shopping list data synced.</p>');
+    refreshQR();
+}
+function missingItems() {
+    const seen = new Set(), out = [];
+    document.querySelectorAll('#grocery-master-content input[data-item]').forEach(c => {
+        const it = c.dataset.item, key = it.toLowerCase();
+        if (!c.checked && !seen.has(key)) { seen.add(key); out.push(it); }
+    });
+    return out;
+}
+function refreshQR() {
+    const items = missingItems();
+    const text = 'Grocery list:\n' + items.map(i => '- ' + i).join('\n');
+    $('qr-box').innerHTML = items.length
+        ? `<img src="https://api.qrserver.com/v1/create-qr-code/?size=170x170&data=${encodeURIComponent(text)}" alt="QR"><p style="margin:8px 0 0">${items.length} items to buy</p>
+           <button class="btn" style="margin-top:8px" onclick="shareList()">📤 Share / Copy</button>`
+        : '<p>You have everything! 🎉</p>';
+}
+async function shareList() {
+    const text = 'Grocery list:\n' + missingItems().map(i => '- ' + i).join('\n');
+    if (navigator.share) { try { await navigator.share({ text }); return; } catch (e) { /* cancelled */ } }
+    await navigator.clipboard.writeText(text);
+    alert('Copied the missing items to your clipboard.');
+}
+
+/* ---------- One handler for every task / grocery checkbox ---------- */
+document.addEventListener('change', e => {
+    const k = e.target.dataset && e.target.dataset.k;
+    if (!k) return;
+    const on = e.target.checked, grocery = k.startsWith('g:');
+    (grocery ? S.state.have : S.state.done)[k] = on;
+    const el = grocery ? e.target.closest('label') : e.target.closest('label').querySelector('.chore-row-text-string');
+    el.style.textDecoration = on ? 'line-through' : 'none';
+    el.style.opacity = on ? '.4' : '1';
+    if (grocery) refreshQR();
+    api({ action: grocery ? 'have' : 'toggle', key: k, value: on });
+});
+
+function addTask(btn, i) {
+    const inp = btn.previousElementSibling, t = inp.value.trim();
+    if (!t) return;
+    (S.state.extra[i] = S.state.extra[i] || []).push(t);
+    render();
+    api({ action: 'addTask', day: i, text: t });
+}
+
+/* ---------- Recipe modal ---------- */
+function viewRecipeModal(i) {
+    const d = S.days[i];
+    if (!d) return;
+    $('modal-recipe-title').innerText = d.meal;
+    $('modal-recipe-meta').innerText = `${String(d.day).toUpperCase()} | ⏱️ ${d.cook_time}m | 💰 $${d.cost} | 🔥 ${d.calories} cal (${d.macros})`;
+    const raw = String(d.details || '');
+    const [ingPart, stepPart = ''] = raw.replace('INGREDIENTS:', '').split('STEPS:');
+    let steps = stepPart.split('\n').map(cleanStep).filter(Boolean);
+    if (steps.length === 1) steps = steps[0].split(/(?<=[.!?])\s+(?=[A-Z0-9])/).map(cleanStep).filter(Boolean);
+    $('modal-recipe-ingredients').innerHTML = (splitItems(ingPart).length ? splitItems(ingPart) : ['Check grocery list.']).map(x => `<li>• ${esc(x)}</li>`).join('');
+    $('modal-recipe-steps').innerHTML = (steps.length ? steps : ['No directions logged.']).map(x => `<li>${esc(x)}</li>`).join('');
     openModal('recipe-modal');
 }
+// strips "1." / "Step 2:" prefixes and drops lines that are only a number (the cause of the empty-looking lines)
+function cleanStep(s) { s = s.replace(/^\s*(?:Step\s*)?\d+[.):]?\s*/i, '').trim(); return /^\d*[.)]?$/.test(s) ? '' : s; }
 
-function saveAdHocTaskToGlass(btn, rowIndex) {
-    const input = btn.previousElementSibling;
-    if (!input.value.trim()) return;
-    const list = btn.closest('.chore-section').querySelector('.chores-list-sub-container');
-    const row = document.createElement('div');
-    row.className = "single-chore-row-item";
-    row.style.cssText = "margin-bottom:6px; display:flex; align-items:center; gap:8px;";
-    row.innerHTML = `<span class="user-badge-profile unassigned">•</span><span class="chore-row-text-string">${esc(input.value.trim())}</span>`;
-    list.appendChild(row);
-    input.value = "";
-    input.closest('.task-input-hidden-row').style.display = "none";
+/* ---------- Change of Plans ---------- */
+function renderPlans() {
+    const box = document.querySelector('#plans-modal .modal-content');
+    if (box.dataset.built) return;
+    box.dataset.built = '1';
+    const opts = S.days.map((d, i) => `<option value="${i}">${esc(d.day)}</option>`).join('');
+    const todayIdx = Math.max(0, S.days.findIndex(d => String(d.day).toLowerCase() === new Date().toLocaleDateString('en-US', { weekday: 'long' }).toLowerCase()));
+    box.innerHTML = `<button class="modal-close" onclick="closeModal('plans-modal')">❌ Close</button>
+        <h2 class="modal-header-text">🔄 Change of Plans</h2>
+        <p style="color:var(--text-muted)">Which day?</p>
+        <select id="plan-day" class="task-text-field" style="margin-bottom:15px">${opts}</select>
+        <button class="btn-block mode-btn" onclick="plan('takeout')">🥡 Order Takeout</button>
+        <button class="btn-block mode-btn" onclick="plan('push')">❄️ Push to Next Week</button>
+        <div style="display:flex;gap:8px;margin-bottom:12px"><select id="plan-swap" class="task-text-field">${opts}</select>
+            <button class="btn" style="white-space:nowrap" onclick="plan('swap')">🔀 Swap with this day</button></div>
+        <button class="btn-block mode-btn highlight" onclick="plan('newDish')">✨ Try Something New</button>
+        <p id="plan-status" style="color:var(--text-muted)"></p>`;
+    $('plan-day').value = todayIdx;
+    $('plan-swap').value = Math.min(todayIdx + 1, S.days.length - 1);
+}
+async function plan(action) {
+    const day = +$('plan-day').value, b = +$('plan-swap').value, st = $('plan-status');
+    if (action === 'swap' && day === b) { st.innerText = 'Pick two different days.'; return; }
+    st.innerText = action === 'newDish' ? '✨ Asking Gemini for a fresh idea…' : 'Updating…';
+    try {
+        const p = await api({ action, day, a: day, b });
+        apply(p);
+        st.innerText = '';
+        closeModal('plans-modal');
+    } catch (e) { st.innerText = 'Something went wrong. Try again.'; }
+}
+
+/* ---------- Nanny Nook ---------- */
+async function saveNanny() {
+    const text = $('nanny-text-input').value.trim();
+    const meal = (document.querySelector('input[name="nanny-meal"]:checked') || {}).value || 'Snack';
+    const btn = document.querySelector('#nanny-modal .btn-block');
+    if (!text) return;
+    btn.innerText = 'Saving…';
+    try {
+        const p = await api({ action: 'nanny', meal, text });
+        if (p.error) throw new Error(p.error);
+        $('nanny-text-input').value = '';
+        btn.innerText = '✅ Saved to the NannyLog tab';
+    } catch (e) { btn.innerText = '⚠️ Not saved, try again'; }
+    setTimeout(() => { btn.innerText = "💾 Save to Parents' Phones"; }, 2500);
 }
 
 function toggleTaskInput(btn) { const r = btn.nextElementSibling; r.style.display = r.style.display === "none" ? "flex" : "none"; }
-function toggleChoreVisual(el, idx) { el.classList.toggle('done'); const c = el.querySelector('input[type="checkbox"]'); c.checked = el.classList.contains('done'); }
-function openModal(id) { document.getElementById(id).classList.add('active'); }
-function closeModal(id) { document.getElementById(id).classList.remove('active'); }
+function openModal(id) { $(id).classList.add('active'); }
+function closeModal(id) { $(id).classList.remove('active'); }
 
-fetchDashboardData();
+document.querySelector('#nanny-modal .btn-block').onclick = saveNanny;
+load();
