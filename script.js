@@ -7,18 +7,48 @@ const $ = id => document.getElementById(id);
 const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
 const splitItems = str => String(str || '').split(',').map(s => s.trim()).filter(Boolean);
+
+// XHR wrapper for iOS 15 compatibility with Google Apps Script redirects
+function apiGet(url) {
+    return new Promise((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhr.open('GET', url);
+        xhr.onload = () => {
+            try { resolve(JSON.parse(xhr.responseText)); }
+            catch (e) { reject(new Error('Invalid JSON response')); }
+        };
+        xhr.onerror = () => reject(new Error('Network error'));
+        xhr.send();
+    });
+}
+
+function apiPost(url, body) {
+    return new Promise((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhr.open('POST', url);
+        xhr.setRequestHeader('Content-Type', 'text/plain;charset=utf-8');
+        xhr.onload = () => {
+            try { resolve(JSON.parse(xhr.responseText)); }
+            catch (e) { reject(new Error('Invalid JSON response')); }
+        };
+        xhr.onerror = () => reject(new Error('Network error'));
+        xhr.send(JSON.stringify(body));
+    });
+}
+
 async function load() {
     try {
-        const r = await fetch(API_URL + '?token=' + encodeURIComponent(TOKEN));
-        apply(await r.json());
+        const data = await apiGet(API_URL + '?token=' + encodeURIComponent(TOKEN));
+        apply(data);
     } catch (e) {
-        $('calendar').innerHTML = '<div class="loading-state" style="color:#ff4757">Could not reach the kitchen database. Check API_URL and TOKEN.</div>';
+        $('calendar').innerHTML = `<div class="loading-state" style="color:#ff4757">Could not reach the kitchen database: ${esc(e.message)}</div>`;
     }
 }
+
 async function api(body) {
-    const r = await fetch(API_URL, { method: 'POST', body: JSON.stringify({ token: TOKEN, ...body }) });
-    return r.json();
+    return await apiPost(API_URL, { token: TOKEN, ...body });
 }
+
 function apply(p) {
     if (p.error) { $('calendar').innerHTML = `<div class="loading-state" style="color:#ff4757">${esc(p.error)}</div>`; return; }
     S = p;
@@ -32,7 +62,7 @@ function parseChores(i) {
     String(d.chore || '').split('|').forEach(raw => {
         const owner = raw.includes('[A]') ? 'A' : raw.includes('[E]') ? 'E' : '';
         const text = raw.replace('[A]', '').replace('[E]', '').trim();
-        if (!text || seen.has(text.toLowerCase())) return;       // never list the same task twice
+        if (!text || seen.has(text.toLowerCase())) return;       
         seen.add(text.toLowerCase());
         tasks.push({ text, owner });
     });
@@ -75,7 +105,6 @@ function render() {
     renderPlans();
 }
 
-/* ---------- Grocery: tick what you already have; only the rest goes to the phone ---------- */
 function renderGrocery() {
     let html = '';
     S.days.forEach((d, i) => {
@@ -114,7 +143,6 @@ async function shareList() {
     alert('Copied the missing items to your clipboard.');
 }
 
-/* ---------- One handler for every task / grocery checkbox ---------- */
 document.addEventListener('change', e => {
     const k = e.target.dataset && e.target.dataset.k;
     if (!k) return;
@@ -135,7 +163,6 @@ function addTask(btn, i) {
     api({ action: 'addTask', day: i, text: t });
 }
 
-/* ---------- Recipe modal ---------- */
 function viewRecipeModal(i) {
     const d = S.days[i];
     if (!d) return;
@@ -145,7 +172,6 @@ function viewRecipeModal(i) {
     const [ingPart, stepPart = ''] = raw.replace('INGREDIENTS:', '').split('STEPS:');
     let steps = stepPart.split('\n').map(cleanStep).filter(Boolean);
     if (steps.length === 1) {
-        // iOS 15 compatible sentence splitter without lookbehinds
         steps = steps[0].match(/[^.!?]+[.!?]+(\s|$)/g) || [steps[0]];
         steps = steps.map(cleanStep).filter(Boolean);
     }
@@ -153,13 +179,11 @@ function viewRecipeModal(i) {
     $('modal-recipe-steps').innerHTML = (steps.length ? steps : ['No directions logged.']).map(x => `<li>${esc(x)}</li>`).join('');
     openModal('recipe-modal');
 }
-// strips "1." / "Step 2:" prefixes and drops lines that are only a number
 function cleanStep(s) { s = String(s).replace(/^\s*(?:Step\s*)?\d+[.):]?\s*/i, '').trim(); return /^\d*[.)]?$/.test(s) ? '' : s; }
 
-/* ---------- Change of Plans ---------- */
 function renderPlans() {
     const box = document.querySelector('#plans-modal .modal-content');
-    if (box.dataset.built) return;
+    if (!box || box.dataset.built) return;
     box.dataset.built = '1';
     const opts = S.days.map((d, i) => `<option value="${i}">${esc(d.day)}</option>`).join('');
     const todayIdx = Math.max(0, S.days.findIndex(d => String(d.day).toLowerCase() === new Date().toLocaleDateString('en-US', { weekday: 'long' }).toLowerCase()));
@@ -188,7 +212,6 @@ async function plan(action) {
     } catch (e) { st.innerText = 'Something went wrong. Try again.'; }
 }
 
-/* ---------- Nanny Nook ---------- */
 async function saveNanny() {
     const text = $('nanny-text-input').value.trim();
     const meal = (document.querySelector('input[name="nanny-meal"]:checked') || {}).value || 'Snack';
@@ -208,5 +231,6 @@ function toggleTaskInput(btn) { const r = btn.nextElementSibling; r.style.displa
 function openModal(id) { $(id).classList.add('active'); }
 function closeModal(id) { $(id).classList.remove('active'); }
 
-document.querySelector('#nanny-modal .btn-block').onclick = saveNanny;
+const nannyBtn = document.querySelector('#nanny-modal .btn-block');
+if (nannyBtn) nannyBtn.onclick = saveNanny;
 load();
