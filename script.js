@@ -143,16 +143,28 @@ async function shareList() {
     alert('Copied the missing items to your clipboard.');
 }
 
-document.addEventListener('change', e => {
-    const k = e.target.dataset && e.target.dataset.k;
-    if (!k) return;
-    const on = e.target.checked, grocery = k.startsWith('g:');
-    (grocery ? S.state.have : S.state.done)[k] = on;
-    const el = grocery ? e.target.closest('label') : e.target.closest('label').querySelector('.chore-row-text-string');
-    el.style.textDecoration = on ? 'line-through' : 'none';
-    el.style.opacity = on ? '.4' : '1';
-    if (grocery) refreshQR();
-    api({ action: grocery ? 'have' : 'toggle', key: k, value: on });
+
+document.addEventListener('click', e => {
+    // 1. Handle Recipe Clicks on Meal Cards
+    const mealCard = e.target.closest('.meal-section');
+    if (mealCard) {
+        // Find the day index from the parent day-card
+        const dayCard = mealCard.closest('.day-card');
+        if (dayCard) {
+            const dayName = dayCard.dataset.day;
+            const index = S.days.findIndex(d => String(d.day).toLowerCase() === String(dayName).toLowerCase());
+            if (index !== -1) viewRecipeModal(index);
+        }
+        return;
+    }
+
+    // 2. Handle Add Task Toggle Button
+    const addTaskBtn = e.target.closest('.add-task-inline-btn');
+    if (addTaskBtn) {
+        const r = addTaskBtn.nextElementSibling;
+        if (r) r.style.display = r.style.display === "none" ? "flex" : "none";
+        return;
+    }
 });
 
 function addTask(btn, i) {
