@@ -144,13 +144,17 @@ function viewRecipeModal(i) {
     const raw = String(d.details || '');
     const [ingPart, stepPart = ''] = raw.replace('INGREDIENTS:', '').split('STEPS:');
     let steps = stepPart.split('\n').map(cleanStep).filter(Boolean);
-    if (steps.length === 1) steps = steps[0].split(/(?<=[.!?])\s+(?=[A-Z0-9])/).map(cleanStep).filter(Boolean);
+    if (steps.length === 1) {
+        // iOS 15 compatible sentence splitter without lookbehinds
+        steps = steps[0].match(/[^.!?]+[.!?]+(\s|$)/g) || [steps[0]];
+        steps = steps.map(cleanStep).filter(Boolean);
+    }
     $('modal-recipe-ingredients').innerHTML = (splitItems(ingPart).length ? splitItems(ingPart) : ['Check grocery list.']).map(x => `<li>• ${esc(x)}</li>`).join('');
     $('modal-recipe-steps').innerHTML = (steps.length ? steps : ['No directions logged.']).map(x => `<li>${esc(x)}</li>`).join('');
     openModal('recipe-modal');
 }
-// strips "1." / "Step 2:" prefixes and drops lines that are only a number (the cause of the empty-looking lines)
-function cleanStep(s) { s = s.replace(/^\s*(?:Step\s*)?\d+[.):]?\s*/i, '').trim(); return /^\d*[.)]?$/.test(s) ? '' : s; }
+// strips "1." / "Step 2:" prefixes and drops lines that are only a number
+function cleanStep(s) { s = String(s).replace(/^\s*(?:Step\s*)?\d+[.):]?\s*/i, '').trim(); return /^\d*[.)]?$/.test(s) ? '' : s; }
 
 /* ---------- Change of Plans ---------- */
 function renderPlans() {
@@ -173,7 +177,7 @@ function renderPlans() {
     $('plan-swap').value = Math.min(todayIdx + 1, S.days.length - 1);
 }
 async function plan(action) {
-    const day = +$('plan-day').value, b = +$('plan-swap').value, st = $('plan-status');
+    const day = +$('plan-day').value, b = +$('plan-swap').value, st =$('plan-status');
     if (action === 'swap' && day === b) { st.innerText = 'Pick two different days.'; return; }
     st.innerText = action === 'newDish' ? '✨ Asking Gemini for a fresh idea…' : 'Updating…';
     try {
