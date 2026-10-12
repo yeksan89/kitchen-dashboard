@@ -1,17 +1,17 @@
-// 🔗 PASTE YOUR COPIED GOOGLE SHEET ADDRESS LINK HERE:
+// 🔗 YOUR MASTER SPREADSHEET URL:
 const SHEET_URL = "https://docs.google.com/spreadsheets/d/18XothmKmHTmP0Z80ovk3sfIL2BB4Jjfdv47ctW8sW2A/edit?gid=0#gid=0";
 
 function getSheetId(url) {
     const matches = url.match(/\/d\/([^/]+)/);
-    return matches ? matches[1] : null;
+    return matches ? matches : null;
 }
 
 let loadedDataCache = [];
 
 async function fetchDashboardData() {
     const sheetId = getSheetId(SHEET_URL);
-    if (!sheetId || SHEET_URL.includes("PASTE_YOUR_ACTUAL")) {
-        document.getElementById('calendar').innerHTML = '<div class="loading-state" style="color: #ff4757; text-align:center;">Error: Please open script.js line 2 and paste your published Google Sheet link!</div>';
+    if (!sheetId) {
+        document.getElementById('calendar').innerHTML = '<div class="loading-state" style="color: #ff4757; text-align:center;">Error parsing Sheet URL ID.</div>';
         return;
     }
     const csvUrl = `https://google.com{sheetId}/gviz/tq?tqx=out:csv&sheet=Dashboard`;
@@ -25,19 +25,31 @@ async function fetchDashboardData() {
 }
 
 function processRows(csvText) {
+    // Safely parses comma-separated data values
     const rows = csvText.split('\n').map(row => 
         row.split(/,(?=(?:(?:[^"]*"){2})*[^"]*\()/).map(cell => cell.replace(/^"|"\$/g, '').trim())
     );
+    
     loadedDataCache = rows.slice(1);
-    if (loadedDataCache[9] && loadedDataCache[9][1]) {
-        parsePrayerRibbon(loadedDataCache[9][1]);
+    
+    // Read the prayer times string dynamically written by Claude to cell B10
+    const prayerRow = loadedDataCache.find(r => r[0] && r[0].toLowerCase() === 'fajr');
+    if (loadedDataCache && loadedDataCache[8] && loadedDataCache[8][1]) {
+        parsePrayerRibbon(loadedDataCache[8][1]);
+    } else {
+        // Fallback row check if indices shifted
+        const rawStringRow = loadedDataCache.find(r => r.some(c => c.includes('Fajr')));
+        if (rawStringRow) {
+            const matchStr = rawStringRow.find(c => c.includes('Fajr'));
+            if (matchStr) parsePrayerRibbon(matchStr);
+        }
     }
     renderDashboard();
 }
 
 function parsePrayerRibbon(ribbonText) {
     const ribbonContainer = document.getElementById('prayer-ribbon-content');
-    if (!ribbonText) return;
+    if (!ribbonText || ribbonText.includes('Day')) return;
     ribbonContainer.innerHTML = "";
     const blocks = ribbonText.split('|');
     blocks.forEach(block => {
@@ -60,7 +72,8 @@ function renderDashboard() {
     let groceryMasterAccumulator = "";
 
     loadedDataCache.forEach((row, index) => {
-        if (index > 6) return; 
+        if (index > 6) return; // Only parse the 7 calendar days
+        
         const day = row[0];
         const mealName = row[1] || "No meal planned";
         const cuisine = (row[2] || "standard").toLowerCase();
@@ -73,13 +86,14 @@ function renderDashboard() {
         const stepsData = row[9] || "No cooking directions logged.";
         const groceriesData = row[10] || "";
 
-        if (!day) return;
+        if (!day || day.includes('Is Cleaner')) return;
+
         if (groceriesData) {
             groceryMasterAccumulator += `
                 <div class="grocery-itemized-block" style="margin-bottom:20px; border-bottom:1px solid rgba(255,255,255,0.05); padding-bottom:15px;">
                     <h4 style="margin:0 0 5px 0;">${day.toUpperCase()} | ${mealName} <span style="color:var(--turkish-neon);">⏱️ ${cookTime}m</span></h4>
                     <p style="color:var(--text-muted); font-size:0.85rem; margin:0 0 10px 0;">Est Cost: $${cost} | ${calories} cal (${macros})</p>
-                    <ul style="list-style:none; padding:0; margin:0;">` + groceriesData.split(',').map(i => i.trim() ? `<li>• ${i}</li>` : '').join('') + `</ul>
+                    <ul style="list-style:none; padding:0; margin:0;">` + groceriesData.split('\n').map(i => i.trim() ? `<li>• ${i}</li>` : '').join('') + `</ul>
                 </div>`;
         }
 
@@ -130,8 +144,10 @@ function renderDashboard() {
 
 function viewRecipeModal(index) {
     const row = loadedDataCache[index];
+    if (!row) return;
     document.getElementById('modal-recipe-title').innerText = row[1];
-    document.getElementById('modal-recipe-meta').innerText = `${row[2].toUpperCase()} | ⏱️ ${row[3]}m | 💰 $${row[4]} | 🔥 ${row[5]} cal (${row[6]})`;
+    document.getElementById('modal-recipe-meta').innerText = `${row[0].toUpperCase()} | ⏱️ ${row[3]}m | 💰 $${row[4]} | 🔥 ${row[5]} cal (${row[6]})`;
+    
     const rawData = row[9] || "";
     let ing = "Check grocery list.";
     let steps = "Cook standard form.";
@@ -140,7 +156,7 @@ function viewRecipeModal(index) {
         ing = parts[0];
         steps = parts[1];
     }
-    document.getElementById('modal-recipe-ingredients').innerHTML = ing.split(',').map(i => i.trim() ? `<li>• ${i}</li>` : '').join('');
+    document.getElementById('modal-recipe-ingredients').innerHTML = ing.split('\n').map(i => i.trim() ? `<li>• ${i}</li>` : '').join('');
     document.getElementById('modal-recipe-steps').innerHTML = steps.split('.').map(s => s.trim() ? `<li>${s}</li>` : '').join('');
     openModal('recipe-modal');
 }
