@@ -7,7 +7,7 @@ window.addEventListener('error', function (e) {
 });
 
 // Paste your Apps Script web app URL (ends in /exec) and the same API_TOKEN you set in Script Properties
-const API_URL = "https://script.google.com/macros/s/AKfycby22iQbRixzFcgAMNgiLNHwp8m2isit6wQdpVyhgWsdz_1_eeqBeY5S6yx83TF5XRO0/exec";
+const API_URL = "https://script.google.com/macros/s/AKfycbx8_HhY7gUmlzgVprdf9SbOT7OTc4bMq337AecJpzT5GUQxCAdg8NhBKHDnEwhvcCvM/exec";
 const TOKEN = "587c5f3d07d5872b661e077c122fba72";
 
 let S = { days: [], ribbon: '', state: { done: {}, have: {}, extra: {} } };
@@ -259,3 +259,56 @@ document.addEventListener('click', e => {
 const nannyBtn = document.querySelector('#nanny-modal .btn-block');
 if (nannyBtn) nannyBtn.onclick = saveNanny;
 load();
+
+/* ---------- Recipe picker (paste at the very END of script.js) ---------- */
+let RECIPES = null;
+
+function openPicker() {
+    let m = $('picker-modal');
+    if (!m) {
+        m = document.createElement('div');
+        m.id = 'picker-modal';
+        m.className = 'modal-overlay';
+        m.innerHTML = `<div class="modal-content" style="max-width:560px">
+            <button class="modal-close" onclick="closeModal('picker-modal')">❌ Close</button>
+            <h2 class="modal-header-text">📖 My Recipes</h2>
+            <p style="color:var(--text-muted)">Cook it on: <select id="pick-day" class="task-text-field" style="width:auto;display:inline-block"></select></p>
+            <input id="pick-search" type="text" class="task-text-field" placeholder="Search by name or type…" style="margin-bottom:12px">
+            <div id="pick-list"></div>
+            <p id="pick-status" style="color:var(--text-muted)"></p></div>`;
+        document.body.appendChild(m);
+        $('pick-search').addEventListener('input', renderPickList);
+    }
+    const planDay = $('plan-day') ? $('plan-day').value : 0;
+    $('pick-day').innerHTML = S.days.map((d, i) => `<option value="${i}">${esc(d.day)}</option>`).join('');
+    $('pick-day').value = planDay;
+    $('pick-status').innerText = '';
+    closeModal('plans-modal');
+    openModal('picker-modal');
+    if (RECIPES) { renderPickList(); return; }
+    $('pick-list').innerHTML = '<p>Loading your recipes…</p>';
+    apiGet(API_URL + '?token=' + encodeURIComponent(TOKEN) + '&recipes=1')
+        .then(r => { RECIPES = r.recipes || []; renderPickList(); })
+        .catch(() => { $('pick-list').innerHTML = '<p>Could not load recipes.</p>'; });
+}
+
+function renderPickList() {
+    const q = $('pick-search').value.trim().toLowerCase();
+    const list = (RECIPES || []).filter(r => !q || (r.name + ' ' + r.type).toLowerCase().indexOf(q) !== -1);
+    $('pick-list').innerHTML = list.length
+        ? list.map(r => `<button class="btn-block mode-btn" data-name="${esc(r.name)}" data-type="${esc(r.type)}" onclick="pickRecipe(this)" style="text-align:left;font-size:1.25rem">
+              ${esc(r.name)} <span style="color:var(--text-muted);font-size:.9rem">${esc(r.type)}${r.days < 999 ? ' · cooked ' + r.days + 'd ago' : ''}</span></button>`).join('')
+        : '<p>No recipes match.</p>';
+}
+
+async function pickRecipe(btn) {
+    const st = $('pick-status');
+    st.innerText = '✨ Setting up ' + btn.dataset.name + '…';
+    try {
+        const p = await api({ action: 'setRecipe', day: +$('pick-day').value, name: btn.dataset.name, type: btn.dataset.type });
+        apply(p);
+        RECIPES = null;                       // refresh "cooked X days ago" next time
+        closeModal('picker-modal');
+        if (p.warning) alert(p.warning);
+    } catch (e) { st.innerText = 'Something went wrong. Try again.'; }
+}
