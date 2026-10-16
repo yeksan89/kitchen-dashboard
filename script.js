@@ -208,6 +208,7 @@ function renderPlans() {
         <button class="btn-block mode-btn" onclick="plan('push')">❄️ Push to Next Week</button>
         <div style="display:flex;gap:8px;margin-bottom:12px"><select id="plan-swap" class="task-text-field">${opts}</select>
             <button class="btn" style="white-space:nowrap" onclick="plan('swap')">🔀 Swap with this day</button></div>
+        <button class="btn-block mode-btn" onclick="openPicker()">📖 Pick from My Recipes</button>
         <button class="btn-block mode-btn highlight" onclick="plan('newDish')">✨ Try Something New</button>
         <p id="plan-status" style="color:var(--text-muted)"></p>`;
     $('plan-day').value = todayIdx;
@@ -245,8 +246,6 @@ function openModal(id) { $(id).classList.add('active'); }
 function closeModal(id) { $(id).classList.remove('active'); }
 
 // Backup for the recipe cards (opening a recipe twice is harmless).
-// NOTE: the "+ Add Task" button is NOT handled here anymore; its inline onclick plus a second handler here
-// toggled the input twice, so it never appeared.
 document.addEventListener('click', e => {
     const mealCard = e.target.closest ? e.target.closest('.meal-section') : null;
     if (!mealCard) return;
@@ -256,11 +255,7 @@ document.addEventListener('click', e => {
     if (index !== -1) viewRecipeModal(index);
 });
 
-const nannyBtn = document.querySelector('#nanny-modal .btn-block');
-if (nannyBtn) nannyBtn.onclick = saveNanny;
-load();
-
-/* ---------- Recipe picker (paste at the very END of script.js) ---------- */
+/* ---------- Recipe picker ---------- */
 let RECIPES = null;
 
 function openPicker() {
@@ -312,3 +307,7 @@ async function pickRecipe(btn) {
         if (p.warning) alert(p.warning);
     } catch (e) { st.innerText = 'Something went wrong. Try again.'; }
 }
+
+const nannyBtn = document.querySelector('#nanny-modal .btn-block');
+if (nannyBtn) nannyBtn.onclick = saveNanny;
+load();
