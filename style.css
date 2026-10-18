@@ -214,37 +214,3 @@ button, label, select, .meal-section, .meal-section *, .add-task-inline-btn, .bt
     .day-card, .day-card:nth-child(even) { transform: none; }
 }
 
-/* ---------- Apple Watch / Tiny Screen Adjustments ---------- */
-@media screen and (max-width: 400px) {
-    body {
-        padding: 8px !important;
-        font-size: 0.95rem !important;
-    }
-    
-    /* Hide heavy decorative background patterns to boost performance and readability */
-    body, body.ramadan, body.eid {
-        background-image: none !important;
-        background-color: var(--paper) !important;
-    }
-
-    /* Stack cards neatly with compact margins */
-    .card, .dashboard-card {
-        padding: 10px !important;
-        margin-bottom: 10px !important;
-        border-radius: 12px !important;
-    }
-
-    /* Shrink giant headers so they fit the wrist screen */
-    h1 {
-        font-size: 1.3rem !important;
-        text-align: center;
-    }
-
-    /* Make buttons and interactive tap targets larger and easier to hit with a finger */
-    button, .btn {
-        padding: 10px 14px !important;
-        font-size: 1rem !important;
-        width: 100% !important;
-        margin-top: 5px !important;
-    }
-}
