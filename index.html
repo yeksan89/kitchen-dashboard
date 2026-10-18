@@ -2,29 +2,36 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Elham's Kitchen </title>
-    <link rel="stylesheet" href="style.css">
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kitchen Command Center</title>
+    <link rel="stylesheet" href="style.css?v=3">
 </head>
 <body>
     <header>
-        <h1>🍳 Elham's Kitchen</h1>
+        <h1>🍳 KITCHEN COMMAND CENTER</h1>
         <p id="current-date">Reading Grid Matrix...</p>
+        <p id="hijri-date" onclick="openSettings()" title="Tap for Hijri settings and preview"></p>
+        <div id="special-banner"></div>
         <div class="prayer-ribbon-container" id="prayer-ribbon-content">
-            <span style="color:var(--text-muted);">Syncing Hijri coordinates...</span>
+            <span style="color:var(--muted);">Loading prayer times...</span>
         </div>
-        <button class="nanny-nook-anchor" onclick="openModal('nanny-modal')">👶 Mary's Nook</button>
+        <button class="nanny-nook-anchor" onclick="openModal('nanny-modal')">👶 Nanny Nook</button>
     </header>
+
+    <div class="week-tabs">
+        <button class="btn" id="tab-cur" onclick="setWeek('cur')">This week</button>
+        <button class="btn" id="tab-next" onclick="setWeek('next')">Next week</button>
+    </div>
+    <p id="week-note"></p>
 
     <main class="calendar-grid" id="calendar">
         <div class="loading-state">Synchronizing...</div>
     </main>
 
     <footer class="control-bar">
-        <button class="btn btn-primary" onclick="openModal('plans-modal')">🔄 Change of Plans</button>
-        <button class="btn btn-accent" onclick="openModal('grocery-modal')">🛒 View Grocery List</button>
+        <button class="btn" id="btn-plans" onclick="openPlans()">🔄 Change of Plans</button>
+        <button class="btn" id="btn-planweek" onclick="openPlanWeek()">🗓️ Plan a Week</button>
+        <button class="btn btn-accent" onclick="openModal('grocery-modal')">🛒 Groceries</button>
     </footer>
 
     <div id="recipe-modal" class="modal-overlay">
@@ -32,6 +39,7 @@
             <button class="modal-close" onclick="closeModal('recipe-modal')">❌ Close</button>
             <h2 id="modal-recipe-title" class="modal-header-text">Dish Profile</h2>
             <div id="modal-recipe-meta" class="modal-meta-row"></div>
+            <a id="modal-recipe-link" class="btn recipe-link" href="#" target="_blank" rel="noopener" style="display:none">🔗 Open original recipe</a>
             <h3>🛒 Recipe Ingredients</h3>
             <ul id="modal-recipe-ingredients" class="ingredients-list"></ul>
             <h3>🍳 Execution Instructions</h3>
@@ -42,40 +50,31 @@
     <div id="grocery-modal" class="modal-overlay">
         <div class="modal-content">
             <button class="modal-close" onclick="closeModal('grocery-modal')">❌ Close</button>
-            <h2 class="modal-header-text">🛒 Weekend Grocery List</h2>
+            <h2 class="modal-header-text">🛒 Grocery Planner</h2>
             <div class="grocery-split-container">
                 <div class="grocery-list-side">
-                    <p style="color: var(--text-muted); margin-bottom: 25px; font-style: italic;">Itemized dish-by-dish • Premium Clean & Halal Tier Calibrated</p>
                     <div id="grocery-master-content"></div>
                 </div>
                 <div class="qr-code-side">
                     <div class="qr-container-card">
                         <span>📲 Send to Phone</span>
                         <div id="qr-box"></div>
-                        <p style="font-size: 0.85rem; margin-top: 12px; color: var(--text-muted); text-align: center;">Scan with phone camera to open interactive checklist</p>
+                        <p style="font-size: 0.85rem; margin-top: 12px; color: var(--muted); text-align: center;">Only what you still need to buy</p>
                     </div>
                 </div>
             </div>
         </div>
     </div>
 
-    <div id="plans-modal" class="modal-overlay">
-        <div class="modal-content text-center" style="max-width: 480px;">
-            <button class="modal-close" onclick="closeModal('plans-modal')">❌ Close</button>
-            <h2 class="modal-header-text">🔄 Change of Plans</h2>
-            <p style="color: var(--text-muted); margin-bottom: 30px;">Update tonight's kitchen profile instantly:</p>
-            <button class="btn-block mode-btn" onclick="alert('Takeout logged! Chores pushed forward.')">🥡 Order Takeout</button>
-            <button class="btn-block mode-btn" onclick="alert('Select target day card on the glass to swap.')">🔀 Swap Days</button>
-            <button class="btn-block mode-btn" onclick="alert('Ingredients saved for next week\'s budget.')">❄️ Push to Next Week</button>
-            <button class="btn-block mode-btn highlight" onclick="alert('Consulting Gemini for fresh choices...')">✨ Try Something New</button>
-        </div>
-    </div>
+    <div id="plans-modal" class="modal-overlay"><div class="modal-content text-center" style="max-width: 480px;"></div></div>
+    <div id="planweek-modal" class="modal-overlay"><div class="modal-content" style="max-width: 520px;"></div></div>
+    <div id="settings-modal" class="modal-overlay"><div class="modal-content" style="max-width: 520px;"></div></div>
 
     <div id="nanny-modal" class="modal-overlay">
         <div class="modal-content" style="max-width: 520px;">
             <button class="modal-close" onclick="closeModal('nanny-modal')">❌ Close</button>
-            <h2 class="modal-header-text">🍼 Mary's Nook Tracker</h2>
-            <p style="color: var(--text-muted); margin-bottom: 20px;">Log toddler nutrition directly to spreadsheet:</p>
+            <h2 class="modal-header-text">🍼 Nanny Nook Tracker</h2>
+            <p style="color: var(--muted); margin-bottom: 20px;">Log toddler nutrition:</p>
             <div class="nanny-form-group">
                 <div class="nanny-toggle-row">
                     <label class="nanny-radio"><input type="radio" name="nanny-meal" value="Lunch"> Lunch</label>
@@ -86,9 +85,22 @@
             <div class="nanny-form-group" style="margin-top: 25px;">
                 <textarea id="nanny-text-input" placeholder="What did he eat? (e.g. Scrambled eggs, organic strawberries...)" rows="4" class="nanny-textarea"></textarea>
             </div>
-            <button class="btn-block mode-btn highlight" style="margin-top:20px; background: #10ac84; border-color: #10ac84;" onclick="alert('Logged successfully!')">💾 Save to Parents' Phones</button>
+            <button id="nanny-save" class="btn-block mode-btn highlight" style="margin-top:20px;" onclick="saveNanny()">💾 Save to Log</button>
+            <h3 style="margin-top:24px">📅 This week</h3>
+            <div id="nanny-log"></div>
         </div>
     </div>
-    <script src="script.js?v=2"></script>
+
+    <div id="pin-gate" class="modal-overlay">
+        <div class="modal-content text-center" style="max-width: 380px;">
+            <h2 class="modal-header-text">🔒 Kitchen Command Center</h2>
+            <p id="pin-msg" style="color: var(--muted);">Enter your PIN</p>
+            <input id="pin-input" type="password" class="task-text-field" autocomplete="off" autocapitalize="off" style="text-align:center;font-size:1.4rem;margin-bottom:14px">
+            <button class="btn-block mode-btn highlight" onclick="submitPin()">Open</button>
+            <p style="color: var(--muted); font-size: .85rem">This device will remember it.</p>
+        </div>
+    </div>
+
+    <script src="script.js?v=3"></script>
 </body>
 </html>
