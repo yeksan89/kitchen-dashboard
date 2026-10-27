@@ -1,4 +1,4 @@
-/* Kitchen Command Center front-end. Written to run on old Safari (iOS 15): no lookbehind, no :has, XHR instead of fetch. */
+/* Elham’s Kitchen front-end. Written to run on old Safari (iOS 15): no lookbehind, no :has, XHR instead of fetch. */
 window.addEventListener('error', function (e) {
     var b = document.createElement('div');
     b.style.cssText = 'position:fixed;top:0;left:0;right:0;background:#c2493d;color:#fff;padding:6px 10px;z-index:9999;font:12px sans-serif';
@@ -31,10 +31,13 @@ const SPECIAL = [
     { m: 12, d: [10, 11, 12], name: 'Eid al-Adha', greet: 'Eid Mubarak', kind: 'eid' }
 ];
 const RAGHAIB = { name: 'Laylat al-Raghaib', greet: 'Blessed Raghaib', kind: 'special' };
-const PREVIEWS = { '': 'Off (real date)', ramadan: 'Ramadan', fitr: 'Eid al-Fitr', adha: 'Eid al-Adha', isra: "Isra and Mi'raj (a special day)" };
+const PREVIEWS = { '': 'Off (real date)', friday: 'Friday', ramadan: 'Ramadan', fitr: 'Eid al-Fitr', adha: 'Eid al-Adha', isra: "Isra and Mi'raj (a special day)" };
 const PREVIEW_SPECIAL = { fitr: SPECIAL[7], adha: SPECIAL[9], isra: SPECIAL[3] };
 
 let PIN = lsGet('kd_pin') || '', D = null, WK = 'cur', GWK = 'cur', PW = 'next', PREVIEW = '', RECIPES = null, STAPLE_OPEN = false;
+const WATCH = /[?&]watch=1(&|$)/.test(location.search);
+if (WATCH) document.body.classList.add('watch');
+let WTAB = (/[?&]tab=shop(&|$)/.test(location.search)) ? 'shop' : 'today';
 
 /* ---------- helpers ---------- */
 function $(id) { return document.getElementById(id); }
@@ -130,13 +133,43 @@ function isRamadan() {
     if (PREVIEW) return PREVIEW === 'ramadan';
     return !!(D.islamic.today && D.islamic.today[1] === 9);
 }
+// Theme order: Eid, then Ramadan, then any other holy day (Isra and Mi'raj look), then Friday.
+var CALLI = { ramadan: 'رمضان كريم', eid: 'عيد مبارك', friday: 'جمعة مباركة', holy: 'مبارك' };
+function themeNow() {
+    var sp = todaySpecial(), ram = isRamadan(), fri = PREVIEW ? PREVIEW === 'friday' : dowOf(D.today) === 4;
+    var t = (sp && sp.kind === 'eid') ? 'eid' : ram ? 'ramadan' : sp ? 'holy' : fri ? 'friday' : '';
+    return { name: t, ar: t ? CALLI[t] : '', sp: sp };
+}
+// x = position across the top (%), l = length of the string (px)
+var LANTERNS = [[5, 46, 0], [18, 22, 1.3], [31, 8, .6], [44, 28, 2.1], [57, 10, 1.7], [70, 24, .9], [83, 12, 2.4], [95, 52, .3]];
+function lanternSvg() {
+    return '<svg viewBox="0 0 40 64"><circle cx="20" cy="3" r="2.6" fill="none" stroke="var(--lan-cap)" stroke-width="1.6"/>'
+        + '<path d="M15 7h10l2 5H13z" fill="var(--lan-cap)"/>'
+        + '<path d="M20 12L28 17C32 25 31 33 26 42H14C9 33 8 25 12 17z" fill="var(--lan)" stroke="var(--lan-dark)" stroke-width="1.2"/>'
+        + '<ellipse cx="20" cy="29" rx="6" ry="10" fill="#fff4c0" opacity=".55"/><ellipse cx="20" cy="29" rx="3" ry="6" fill="#fffbe0" opacity=".8"/>'
+        + '<path d="M20 12v30M12 17c-3 8-2 17 2 25M28 17c3 8 2 17-2 25M10.5 27h19" stroke="var(--lan-dark)" stroke-width="1" fill="none"/>'
+        + '<path d="M14 42h12l-2 5h-8z" fill="var(--lan-cap)"/><path d="M20 47v8" stroke="var(--lan-cap)" stroke-width="1.6"/><circle cx="20" cy="58" r="3" fill="var(--lan-cap)"/></svg>';
+}
+function drawDeco(theme) {
+    var deco = $('deco'), bg = $('calli-bg');
+    if (!theme.name || WATCH) { deco.innerHTML = ''; bg.textContent = ''; return; }
+    if (deco.getAttribute('data-t') !== theme.name) {
+        deco.innerHTML = LANTERNS.map(function (L, i) {
+            return '<div class="lan' + (i % 2 ? ' far' : '') + '" style="left:' + L[0] + '%;--l:' + L[1] + 'px;-webkit-animation-delay:' + L[2] + 's;animation-delay:' + L[2] + 's"><div class="str"></div>' + lanternSvg() + '</div>';
+        }).join('');
+        deco.setAttribute('data-t', theme.name);
+    }
+    bg.textContent = theme.ar;
+}
 function applyTheme() {
-    var sp = todaySpecial(), ram = isRamadan();
-    document.body.className = (ram ? 'ramadan ' : '') + (sp && sp.kind === 'eid' ? 'eid' : '');
-    var b = $('special-banner'), html = '';
-    if (sp) html = '<div class="banner">' + (sp.kind === 'eid' ? ART.star + ART.crescent : ART.crescent) + '<span>' + esc(sp.greet) + ' <small style="font-size:1rem;font-weight:normal">· ' + esc(sp.name) + (sp.name === RAGHAIB.name ? ' (from Thursday Maghrib)' : '') + '</small></span>' + (sp.kind === 'eid' ? ART.star : ART.lantern) + '</div>';
-    else if (ram) html = '<div class="banner">' + ART.crescent + '<span>Ramadan Mubarak</span>' + ART.lantern + '</div>';
-    else if (dowOf(D.today) === 4) html = '<div class="banner">' + ART.crescent + "<span>Jumu'ah Mubarak</span>" + ART.lantern + '</div>';
+    var th = themeNow(), sp = th.sp, ram = isRamadan();
+    document.body.className = (th.name || '') + (th.name && !WATCH ? ' lanterns' : '') + (WATCH ? ' watch' : '');
+    drawDeco(th);
+    var b = $('special-banner'), html = '', en = '';
+    if (sp) en = esc(sp.greet) + (sp.greet.indexOf(sp.name) === -1 ? ' <small>· ' + esc(sp.name) + '</small>' : '') + (sp.name === RAGHAIB.name ? ' <small>(from Thursday Maghrib)</small>' : '');
+    else if (ram) en = 'Ramadan Mubarak';
+    else if (th.name === 'friday') en = "Jumu'ah Mubarak";
+    if (th.name) html = '<div class="banner"><div class="calli" dir="rtl" lang="ar">' + th.ar + '</div><div class="greet">' + en + '</div></div>';
     b.innerHTML = html;
 }
 
@@ -144,6 +177,7 @@ function applyTheme() {
 function render() {
     if (!D) return;
     applyTheme();
+    if (WATCH) { renderWatch(); return; }
     var now = new Date();
     $('current-date').textContent = now.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' });
     var h = D.islamic.today;
@@ -681,6 +715,62 @@ function deleteRecipeDraft() {
     if (!confirm('Delete "' + DRAFT.name + '" from your recipes?')) return;
     api({ action: 'recipeDelete', name: DRAFT.name }).then(function () { RECIPES = null; closeModal('editor-modal'); openRecipes(); });
 }
+
+/* ---------- Apple Watch view (?watch=1): Today, Tomorrow, Groceries ---------- */
+function setWTab(t) { WTAB = t; renderWatch(); }
+function dayFor(ymd) {
+    var ws = [D.cur, D.next];
+    for (var k = 0; k < ws.length; k++) for (var i = 0; i < 7; i++) if (addDays(ws[k].weekStart, i) === ymd) return { w: ws[k], i: i };
+    return null;
+}
+function watchDay(ymd) {
+    var f = dayFor(ymd);
+    if (!f || !f.w.planned) return '<div class="w-empty">Nothing planned yet</div>';
+    var d = f.w.days[f.i], open = String(d.meal).indexOf('📌') === 0;
+    var h = '<div class="w-day">' + esc(d.day) + ' · ' + fmtDate(ymd) + '</div><div class="w-meal">' + esc(open ? 'Open night' : (d.meal || 'No meal planned')) + '</div>';
+    if (Number(d.cook_time) || Number(d.calories)) h += '<div class="w-meta">⏱️ ' + esc(d.cook_time) + 'm · ≈' + esc(d.calories) + ' cal</div>';
+    if (d.warn) h += '<div class="w-warn">⚠️ Contains ' + esc(d.warn) + '</div>';
+    var tasks = parseChores(f.w, f.i);
+    h += '<div class="w-h">Chores</div>';
+    if (!tasks.length) h += '<div class="w-meta">None</div>';
+    tasks.forEach(function (t) {
+        var done = !!f.w.state.done['c:' + f.i + ':' + t.text.toLowerCase()];
+        h += '<div class="w-chore' + (done ? ' done' : '') + '"><span class="w-own ' + t.owner.toLowerCase() + '">' + (t.owner || '•') + '</span><span class="w-t">' + esc(t.text) + '</span></div>';
+    });
+    return h;
+}
+function watchShop() {
+    var wk = defaultGW(), w = D[wk], h = '', n = 0, aisle = '';
+    var mine = D.my.items.filter(function (i) { return !i.done; });
+    if (mine.length) {
+        h += '<div class="w-h">My items</div>';
+        mine.forEach(function (i) { n++; h += '<div class="w-item" data-t="m" data-k="' + esc(i.id) + '"><span class="w-box"></span><span class="w-t">' + esc(i.text) + '</span></div>'; });
+    }
+    (w.shopping || []).forEach(function (it) {
+        if (!it.staple && w.state.have[it.key]) return;
+        if (it.aisle !== aisle) { h += '<div class="w-h">' + esc(it.aisle) + '</div>'; aisle = it.aisle; }
+        n++;
+        h += '<div class="w-item" data-t="h" data-w="' + wk + '" data-k="' + esc(it.staple ? it.staple : it.key) + '" data-s="' + (it.staple ? '1' : '') + '"><span class="w-box"></span><span class="w-t">' + esc(it.name) + (it.amount ? ' <small>' + esc(it.amount) + '</small>' : '') + '</span></div>';
+    });
+    return n ? h : '<div class="w-empty">You have everything 🎉</div>';
+}
+function renderWatch() {
+    if (!D) return;
+    var th = themeNow(), body = '';
+    ['today', 'tomorrow', 'shop'].forEach(function (t) { $('w-t-' + t).className = WTAB === t ? 'on' : ''; });
+    if (WTAB !== 'shop' && th.name && WTAB === 'today') body += '<div class="w-calli" dir="rtl" lang="ar">' + th.ar + '</div>';
+    body += WTAB === 'today' ? watchDay(D.today) : WTAB === 'tomorrow' ? watchDay(addDays(D.today, 1)) : watchShop();
+    $('w-body').innerHTML = body;
+}
+document.addEventListener('click', function (e) {
+    var r = e.target.closest ? e.target.closest('.w-item') : null;
+    if (!r || !D || !canEdit()) return;
+    var on = !/\bon\b/.test(r.className), k = r.getAttribute('data-k'), t = r.getAttribute('data-t');
+    r.className = 'w-item' + (on ? ' on' : '');
+    if (t === 'm') { D.my.items.forEach(function (i) { if (i.id === k) i.done = on; }); api({ action: 'myToggle', id: k, value: on }); }
+    else if (r.getAttribute('data-s')) { api({ action: 'stapleOut', name: k, value: !on }).then(apply); }
+    else { var wk = r.getAttribute('data-w'); D[wk].state.have[k] = on; api({ action: 'have', week: wk, key: k, value: on }); }
+});
 
 /* ---------- modals ---------- */
 function openModal(id) {
