@@ -7,7 +7,7 @@ window.addEventListener('error', function (e) {
 });
 
 // Your Apps Script web app address (ends in /exec). Nothing secret lives in this file: the PIN is typed on each device.
-const API_URL = "https://script.google.com/macros/s/AKfycbyAOfM98QFtmQygFFzffBn4p4pSzaz80ykCFbitHeE0hcyYUkXadNpC2zkSUjo7-7us/exec";
+const API_URL = "https://script.google.com/macros/s/AKfycbwZcScBlJzSTTtdwHTReEU02oRt90AyrqpYgN--YXoxT10JA1R1G0YQSLLMg_R4IAS8/exec";
 
 const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
