@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Caveat:wght@500;700&family=Patrick+Hand&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Caveat:wght@500;700&family=Patrick+Hand&family=Aref+Ruqaa:wght@400;700&display=swap');
 
 :root {
     --paper: #f6efe0;
@@ -65,11 +65,6 @@ body { margin: 0; padding: 25px; min-height: 100vh; color: var(--ink); font-fami
         radial-gradient(ellipse at 92% 12%, var(--bg2), transparent 42%),
         radial-gradient(ellipse at 72% 92%, var(--bg3), transparent 45%),
         radial-gradient(ellipse at 8% 88%, var(--bg4), transparent 40%); }
-body.ramadan, body.eid { background-image: var(--star), var(--grain),
-        radial-gradient(ellipse at 10% 8%, var(--bg1), transparent 45%),
-        radial-gradient(ellipse at 92% 12%, var(--bg2), transparent 42%),
-        radial-gradient(ellipse at 72% 92%, var(--bg3), transparent 45%),
-        radial-gradient(ellipse at 8% 88%, var(--bg4), transparent 40%); }
 
 header { text-align: center; position: relative; }
 header h1 { font-family: var(--hand); font-weight: 700; font-size: 3.4rem; letter-spacing: 2px; margin: 0 auto 2px; width: fit-content; line-height: 1.1;
@@ -79,7 +74,7 @@ header h1 { font-family: var(--hand); font-weight: 700; font-size: 3.4rem; lette
 #special-banner { margin: 8px auto 0; }
 .banner { display: inline-flex; align-items: center; gap: 10px; padding: 6px 22px; font-family: var(--hand); font-size: 1.8rem; font-weight: 700;
     border: 2px solid var(--gold); border-radius: 30px 10px 30px 12px; background: var(--surface-strong);
-    background-image: var(--star); box-shadow: 0 0 0 3px rgba(201, 162, 74, 0.25), 3px 4px 0 var(--shadow); }
+    box-shadow: 0 0 0 3px rgba(201, 162, 74, 0.25), 3px 4px 0 var(--shadow); }
 .banner svg { width: 34px; height: 34px; flex: none; }
 
 .prayer-ribbon-container { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px 26px; max-width: 1100px; margin: 15px auto 18px; padding: 10px 16px; border: 2px dashed var(--line); border-radius: var(--blob); background: var(--surface); }
@@ -110,7 +105,6 @@ header h1 { font-family: var(--hand); font-weight: 700; font-size: 3.4rem; lette
 
 /* Friday: Jumu'ah art (always) */
 .day-card.friday { --wash: var(--sage); border-color: var(--green); border-style: double; border-width: 4px; }
-.day-card.friday::after, .day-card.special::after { background-image: var(--star); opacity: .55; }
 .day-card.friday .day-name { color: var(--green); }
 /* special Islamic days */
 .day-card.special { border-color: var(--gold); border-width: 3px; --wash: var(--ochre); box-shadow: 0 0 0 3px rgba(201, 162, 74, 0.3), 3px 4px 0 var(--shadow), 0 12px 26px var(--shadow); }
@@ -237,3 +231,97 @@ button, label, select, .meal-section, .meal-section *, .add-task-inline-btn, .bt
 .diag-line { margin: 4px 0; }
 .diag-ok { color: var(--green); }
 .diag-bad { color: #b3261e; }
+
+
+/* ===== Part 2: lantern themes, calligraphy, solid readable boxes ===== */
+:root { --solid: #fffaf0; --lan: #e0a43a; --lan-dark: #8a5a14; --lan-cap: #c9a24a; --lan-glow: #fff1b0; --lan-line: #a8842c; --calli: #8a5a14; }
+body.ramadan { --solid: #18234d; --lan: #e8b93e; --lan-dark: #7a5a10; --lan-glow: #fff1b0; --lan-line: #c9a24a; --calli: #f0cf6b; }
+body.eid { --paper: #fbf3dc; --solid: #fffbea; --lan: #2f9e6f; --lan-dark: #145a3d; --lan-glow: #fff3b8; --lan-line: #b98f2e; --calli: #1f7a52; }
+body.friday { --paper: #eef4e6; --solid: #f5faee; --bg1: rgba(61, 138, 98, 0.38); --bg2: rgba(232, 185, 80, 0.32); --bg3: rgba(61, 138, 98, 0.26); --bg4: rgba(150, 190, 140, 0.4);
+    --accent: #2f8a5f; --lan: #4fa876; --lan-dark: #25663f; --lan-glow: #fff7c2; --lan-line: #6f9a7f; --calli: #25663f; }
+body.holy { --paper: #171233; --card: rgba(36, 28, 79, 0.95); --solid: #241c4f; --surface: rgba(255, 255, 255, 0.09); --surface-strong: rgba(36, 28, 79, 0.97);
+    --ink: #ece8ff; --muted: #b9b2dc; --line: rgba(185, 168, 255, 0.6); --teal: rgba(80, 90, 200, 0.42); --rose: rgba(140, 80, 190, 0.4); --ochre: rgba(185, 168, 255, 0.26); --sage: rgba(60, 130, 170, 0.4);
+    --bg1: rgba(90, 80, 200, 0.5); --bg2: rgba(140, 70, 180, 0.4); --bg3: rgba(70, 130, 190, 0.3); --bg4: rgba(110, 90, 210, 0.4);
+    --accent: #b9a8ff; --gold: #b9a8ff; --shadow: rgba(0, 0, 0, 0.5);
+    --lan: #9b8cf0; --lan-dark: #3f3490; --lan-glow: #e6e0ff; --lan-line: #a79ddc; --calli: #d6ccff; }
+body.holy .day-card.special { box-shadow: 0 0 0 3px rgba(185, 168, 255, 0.3), 3px 4px 0 var(--shadow), 0 12px 26px var(--shadow); }
+
+/* lanterns hang from the top edge, behind the page */
+#deco { position: absolute; top: 0; left: 0; right: 0; height: 0; z-index: -1; pointer-events: none; }
+.lan { position: absolute; top: 0; margin-left: -20px; width: 40px; transform-origin: 50% 0; -webkit-transform-origin: 50% 0;
+    -webkit-animation: sway 5s ease-in-out infinite alternate; animation: sway 5s ease-in-out infinite alternate; }
+.lan .str { width: 2px; margin: 0 auto; background: var(--lan-line); height: var(--l); }
+.lan svg { display: block; width: 40px; height: 64px; }
+@-webkit-keyframes sway { from { -webkit-transform: rotate(-2.5deg); } to { -webkit-transform: rotate(2.5deg); } }
+@keyframes sway { from { transform: rotate(-2.5deg); } to { transform: rotate(2.5deg); } }
+body.lanterns header { padding-top: 92px; }
+body.lanterns .nanny-nook-anchor { top: 96px; }
+
+/* faint calligraphy behind everything */
+#calli-bg { display: none; position: fixed; left: 0; right: 0; top: 34%; z-index: -1; pointer-events: none; text-align: center; font-family: 'Aref Ruqaa', 'Geeza Pro', 'Scheherazade New', serif; font-size: 20vw; line-height: 1; color: var(--calli); opacity: .07; white-space: nowrap; overflow: hidden; }
+body.lanterns #calli-bg { display: block; }
+
+/* the banner: solid box, calligraphy on one line, greeting underneath */
+.banner { display: inline-flex; flex-direction: column; align-items: center; gap: 0; padding: 6px 28px 8px; border-radius: 30px 10px 30px 12px; background: var(--solid); border-color: var(--lan-line); }
+.banner .calli { font-family: 'Aref Ruqaa', 'Geeza Pro', 'Scheherazade New', serif; font-size: 2.9rem; font-weight: 700; line-height: 1.25; color: var(--calli); direction: rtl; }
+.banner .greet { font-family: var(--hand); font-size: 1.6rem; line-height: 1.1; }
+.banner .greet small { font-family: 'Patrick Hand', cursive; font-size: 1rem; font-weight: normal; color: var(--muted); }
+
+/* solid backgrounds: nothing see-through, so text always reads clearly */
+.prayer-ribbon-container, .chore-box, .cuisine-tag, .scale-note, details.staples, .qr-container-card, .control-bar,
+.btn-block, .mgr-row, .flag-card, .warn-tag, .nanny-radio, .nanny-textarea, .fridge-box, .task-text-field, select.task-text-field,
+.field input, .field textarea, .field select, .user-badge-profile.unassigned, input[type="checkbox"], #week-note, #status-line { background-color: var(--solid); }
+/* tinted buttons and tags: a solid base with the tint painted on top */
+.btn, .open-btn, .nanny-nook-anchor, .prayer-time-node.iftar, .cuisine-tag.jordanian, .task-input-hidden-row button, .addrow button,
+.btn-block:hover { background-color: var(--solid); background-image: linear-gradient(var(--ochre), var(--ochre)); }
+.cuisine-tag.turkish, .btn-accent, .recipe-link, .week-tabs .btn.on, .gtabs .btn.on, .mode-btn.highlight { background-color: var(--solid); background-image: linear-gradient(var(--teal), var(--teal)); }
+.cuisine-tag.palestinian, .nanny-nook-anchor { background-color: var(--solid); background-image: linear-gradient(var(--rose), var(--rose)); }
+.nanny-radio.on, input[type="checkbox"]:checked { background-color: var(--solid); background-image: linear-gradient(var(--sage), var(--sage)); }
+body.ramadan .day-card, body.eid .day-card, body.holy .day-card, body.friday .day-card { background: var(--solid); }
+.prayer-ribbon-container { border-style: solid; }
+.week-tabs { position: relative; }
+#week-note, #status-line { display: table; margin: 0 auto 6px; padding: 0 10px; border-radius: 8px; }
+#week-note:empty, #status-line:empty { display: none; }
+body.ramadan #status-line.warn, body.holy #status-line.warn { color: #ff8a80; }
+
+@media (max-width: 600px) {
+    body.lanterns header { padding-top: 78px; }
+    body.lanterns .nanny-nook-anchor { position: static; }
+    .lan svg { width: 32px; height: 51px; }
+    .lan { margin-left: -16px; width: 32px; }
+    .lan .str { height: calc(var(--l) * .55); }
+    .lan.far { display: none; }
+    .banner { padding: 4px 16px 6px; }
+    .banner .calli { font-size: 2.3rem; }
+    .banner .greet { font-size: 1.3rem; }
+}
+@media (prefers-reduced-motion: reduce) { .lan { -webkit-animation: none; animation: none; } }
+
+/* ===== Apple Watch mode: open the page with ?watch=1 ===== */
+#watch { display: none; }
+body.watch { background: #000 !important; background-image: none !important; color: #fff; padding: 4px 6px 24px; font-family: -apple-system, 'Helvetica Neue', Arial, sans-serif; font-size: 20px; }
+body.watch header, body.watch .week-tabs, body.watch #week-note, body.watch #status-line, body.watch main, body.watch .control-bar,
+body.watch #deco, body.watch #calli-bg { display: none !important; }
+body.watch #watch { display: block; }
+#w-tabs { display: flex; gap: 6px; margin: 2px 0 10px; }
+#w-tabs button { flex: 1; min-height: 48px; font: 700 18px -apple-system, 'Helvetica Neue', Arial, sans-serif; color: #fff; background: #1c1c1e; border: 2px solid #3a3a3c; border-radius: 14px; }
+#w-tabs button.on { background: #d9b44a; border-color: #d9b44a; color: #000; }
+#w-tabs button:last-child { flex: 0 0 64px; }
+.w-calli { font-family: 'Aref Ruqaa', 'Geeza Pro', serif; font-size: 30px; line-height: 1.3; text-align: center; color: #f0cf6b; direction: rtl; white-space: nowrap; overflow: hidden; margin-bottom: 4px; }
+.w-day { font-size: 16px; color: #9a9aa0; text-transform: uppercase; letter-spacing: 1px; }
+.w-meal { font-size: 30px; font-weight: 700; line-height: 1.15; margin: 4px 0 6px; }
+.w-meta { font-size: 17px; color: #b8b8be; margin-bottom: 4px; }
+.w-warn { font-size: 17px; color: #ff8a80; margin: 4px 0; }
+.w-h { font-size: 15px; letter-spacing: 1.5px; text-transform: uppercase; color: #d9b44a; margin: 16px 0 4px; }
+.w-chore { display: flex; align-items: center; gap: 10px; min-height: 44px; border-bottom: 1px solid #2c2c2e; font-size: 21px; }
+.w-chore.done .w-t { text-decoration: line-through; opacity: .45; }
+.w-own { flex: none; width: 28px; height: 28px; line-height: 28px; border-radius: 50%; text-align: center; font-size: 16px; font-weight: 700; background: #3a3a3c; }
+.w-own.a { background: #2e6fa8; }
+.w-own.e { background: #8a4f8a; }
+.w-item { display: flex; align-items: center; gap: 12px; min-height: 52px; padding: 4px 2px; border-bottom: 1px solid #2c2c2e; font-size: 22px; line-height: 1.2; -webkit-tap-highlight-color: rgba(255, 255, 255, .15); }
+.w-item .w-box { flex: none; width: 30px; height: 30px; border: 2px solid #8e8e93; border-radius: 8px; text-align: center; line-height: 26px; font-size: 22px; color: #000; }
+.w-item small { color: #9a9aa0; font-size: 17px; }
+.w-item.on { opacity: .4; }
+.w-item.on .w-box { background: #d9b44a; border-color: #d9b44a; }
+.w-item.on .w-t { text-decoration: line-through; }
+.w-empty { text-align: center; color: #9a9aa0; padding: 28px 0; font-size: 20px; }
