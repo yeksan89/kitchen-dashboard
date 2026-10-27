@@ -214,3 +214,26 @@ button, label, select, .meal-section, .meal-section *, .add-task-inline-btn, .bt
     .day-card, .day-card:nth-child(even) { transform: none; }
 }
 
+/* ===== Part 1 additions: status line, recipe scaling, safety flags, recipe manager and editor, diagnostics ===== */
+#status-line { text-align: center; font-size: .95rem; margin: 0 0 6px; color: var(--muted); }
+#status-line.warn { color: #b3261e; font-weight: bold; }
+.warn-tag { margin: 4px 0 8px; padding: 3px 10px; border: 1.5px solid #b3261e; border-radius: 10px 4px 10px 5px; color: #b3261e; background: var(--surface); font-size: .95rem; }
+.open-night { margin: 4px 0 8px; color: var(--muted); font-size: 1rem; }
+.open-btn { background: var(--ochre); }
+#modal-recipe-warn .warn-tag { margin-bottom: 12px; }
+.scale-note { padding: 8px 12px; border: 1.5px dashed var(--line); border-radius: 12px 4px 12px 5px; background: var(--surface); margin: 6px 0 10px; }
+.ing-orig { opacity: .75; }
+.mgr-row { display: flex; align-items: center; gap: 8px; width: 100%; text-align: left; margin-bottom: 8px; padding: 8px 12px; font-family: inherit; font-size: 1.15rem; color: var(--ink); background: var(--surface-strong); border: 2px solid var(--line); border-radius: 14px 5px 14px 6px; cursor: pointer; }
+.mgr-row small { color: var(--muted); }
+.mgr-row .grow { flex: 1; }
+.field { margin: 8px 0; }
+.field label { display: block; font-family: var(--hand); font-size: 1.3rem; }
+.field input, .field textarea, .field select { width: 100%; padding: 8px 10px; font-family: inherit; font-size: 1.05rem; color: var(--ink); background: var(--surface); border: 1.5px solid var(--line); border-radius: 10px 4px 10px 5px; }
+.field-row { display: flex; gap: 10px; flex-wrap: wrap; }
+.field-row .field { flex: 1 1 120px; }
+.flag-card { margin: 8px 0; padding: 8px 12px; border: 2px solid #b3261e; border-radius: 12px 4px 12px 5px; background: var(--surface); }
+.flag-card .btn { font-size: 1.1rem; padding: 2px 12px; margin: 4px 6px 0 0; }
+.flag-card.ok { border-color: var(--green); }
+.diag-line { margin: 4px 0; }
+.diag-ok { color: var(--green); }
+.diag-bad { color: #b3261e; }
