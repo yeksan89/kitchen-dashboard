@@ -7,7 +7,7 @@ window.addEventListener('error', function (e) {
 });
 
 // Your Apps Script web app address (ends in /exec). Nothing secret lives in this file: the PIN is typed on each device.
-const API_URL = "https://script.google.com/macros/s/AKfycbwbV6DQBp-30H6p0G9lXTn92we0Ruk6bqf6jEyQp4HBXMB7vxA0ujGapPUXCnZRkDG9/exec";
+const API_URL = "https://script.google.com/macros/s/AKfycby22iQbRixzFcgAMNgiLNHwp8m2isit6wQdpVyhgWsdz_1_eeqBeY5S6yx83TF5XRO0/exec";
 
 const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -141,6 +141,7 @@ function render() {
     var h = D.islamic.today;
     $('hijri-date').textContent = h ? hijriText(h) : '';
     renderRibbon();
+    renderStatus();
     $('tab-cur').className = 'btn' + (WK === 'cur' ? ' on' : '');
     $('tab-next').className = 'btn' + (WK === 'next' ? ' on' : '');
     $('tab-cur').textContent = 'This week';
@@ -149,6 +150,7 @@ function render() {
     $('week-note').textContent = 'Week of ' + fmtDate(w.weekStart) + (w.planned ? (w.generatedAt ? ' · planned ' + fmtDate(w.generatedAt) : '') : ' · not planned yet');
     $('btn-plans').style.display = canEdit() ? '' : 'none';
     $('btn-planweek').style.display = canEdit() ? '' : 'none';
+    $('btn-recipes').style.display = canEdit() ? '' : 'none';
     renderCalendar();
     if ($('grocery-modal').classList.contains('active')) renderGrocery();
 }
@@ -199,12 +201,15 @@ function cardHtml(d, i, w) {
     var tag = sp ? '<div class="special-tag">✦ ' + esc(sp.greet) + ' · ' + esc(sp.name) + '</div>' : (i === 4 ? '<div class="special-tag">✦ Jumu\'ah Mubarak</div>' : '');
     var metrics = (Number(d.calories) || Number(d.cook_time))
         ? '<div class="meta-metrics-row"><span>⏱️ ' + esc(d.cook_time) + 'm</span><span>💰 $' + esc(d.cost) + '</span><span>🔥 ≈' + esc(d.calories) + ' cal/serving</span></div>' : '';
+    var isOpen = String(d.meal).indexOf('📌') === 0;
+    var warnTag = d.warn ? '<div class="warn-tag">⚠️ Contains ' + esc(d.warn) + '</div>' : '';
+    var openBtn = isOpen ? '<div class="open-night">Nothing planned yet.</div>' + (edit ? '<button class="btn open-btn" onclick="event.stopPropagation();openPlans(' + i + ')">Pick a meal</button>' : '') : '';
     var addTask = edit ? '<div class="add-task-container"><button class="add-task-inline-btn" onclick="toggleTaskInput(this)">+ Add Task</button>'
         + '<div class="task-input-hidden-row" style="display:none;"><input type="text" class="task-text-field"><button onclick="addTask(this, ' + i + ')">➕</button></div></div>' : '';
     return '<div class="day-card' + (isToday ? ' today' : '') + (i === 4 ? ' friday' : '') + (sp ? ' special ' + sp.kind : '') + '" data-day="' + esc(d.day) + '">' + art
         + '<div class="day-name">' + esc(d.day) + (isToday ? ' 📍' : '') + '<small>' + fmtDate(ymd) + (h ? ' · ' + h[0] + ' ' + HIJRI_MONTHS[h[1] - 1] : '') + '</small></div>' + tag
-        + '<div class="meal-section" data-i="' + i + '" style="cursor:pointer;" onclick="viewRecipeModal(' + i + ')">'
-        + '<span class="cuisine-tag ' + cuisine + '">' + esc(cuisine) + '</span><p class="meal-title">' + esc(d.meal || 'No meal planned') + '</p>' + metrics + '</div>'
+        + '<div class="meal-section" data-i="' + i + '" style="cursor:pointer;" onclick="cardTap(' + i + ')">'
+        + '<span class="cuisine-tag ' + cuisine + '">' + esc(cuisine) + '</span><p class="meal-title">' + esc(isOpen ? 'Open night' : (d.meal || 'No meal planned')) + '</p>' + metrics + warnTag + openBtn + '</div>'
         + '<div class="chore-section"><div class="chore-box"><div class="chores-list-sub-container">' + (tasks || '<span class="hint">No chores</span>') + '</div></div>' + addTask + '</div></div>';
 }
 function toggleTaskInput(btn) { var r = btn.nextElementSibling; r.style.display = r.style.display === 'none' ? 'flex' : 'none'; }
@@ -219,21 +224,52 @@ function addTask(btn, i) {
 
 /* ---------- recipe popup ---------- */
 function cleanStep(s) { s = String(s).replace(/^\s*(?:Step\s*)?\d+[.):]?\s*/i, '').trim(); return /^\d*[.)]?$/.test(s) ? '' : s; }
+function cardTap(i) {
+    var d = W().days[i];
+    if (!d) return;
+    if (String(d.meal).indexOf('📌') === 0) { if (canEdit()) openPlans(i); return; }
+    viewRecipeModal(i);
+}
+function section(t, name) {
+    var names = ['SERVINGS', 'SCALE', 'SOURCE', 'INGREDIENTS', 'ORIGINAL', 'STEPS'];
+    var m = new RegExp('(?:^|\\n)' + name + ':\\n?([\\s\\S]*?)(?=\\n(?:' + names.join('|') + '):|$)').exec(t);
+    return m ? m[1].trim() : '';
+}
+var RV = null;
 function viewRecipeModal(i) {
     var d = W().days[i];
     if (!d || !d.meal) return;
+    var t = String(d.details || '');
+    var scale = parseFloat(section(t, 'SCALE')) || 1, servings = section(t, 'SERVINGS'), source = section(t, 'SOURCE');
+    var scaled = splitItems(section(t, 'INGREDIENTS')), orig = splitItems(section(t, 'ORIGINAL'));
+    var steps = section(t, 'STEPS').split('\n').map(cleanStep).filter(Boolean);
+    if (steps.length === 1) steps = (steps[0].match(/[^.!?]+[.!?]+(\s|$)/g) || [steps[0]]).map(cleanStep).filter(Boolean);
+    if (!section(t, 'INGREDIENTS') && t.indexOf('INGREDIENTS:') !== -1) scaled = splitItems(t.replace('INGREDIENTS:', '').split('STEPS:')[0]);   // older plans
+    var isLeft = /^leftover/i.test(d.meal);
+    RV = { scaled: scaled, orig: orig, view: 'scaled' };
     $('modal-recipe-title').textContent = d.meal;
-    $('modal-recipe-meta').textContent = d.day.toUpperCase() + (Number(d.calories) ? ' | ⏱️ ' + d.cook_time + 'm | 💰 $' + d.cost + ' | 🔥 ≈' + d.calories + ' cal per serving (' + d.macros + ')' : '');
+    $('modal-recipe-meta').textContent = d.day.toUpperCase() + (Number(d.calories) ? ' | ⏱️ ' + d.cook_time + 'm | 💰 ≈$' + d.cost + ' | 🔥 ≈' + d.calories + ' cal per serving (' + d.macros + ')' : '');
+    $('modal-recipe-warn').innerHTML = d.warn ? '<div class="warn-tag">⚠️ Contains ' + esc(d.warn) + ' (the original ingredient was kept). Please check before cooking.</div>' : '';
     var a = $('modal-recipe-link');
     if (d.url && /^https?:\/\//i.test(d.url)) { a.href = d.url; a.style.display = 'inline-block'; } else { a.style.display = 'none'; a.removeAttribute('href'); }
-    var parts = String(d.details || '').replace('INGREDIENTS:', '').split('STEPS:');
-    var ing = splitItems(parts[0]), steps = String(parts[1] || '').split('\n').map(cleanStep).filter(Boolean);
-    if (steps.length === 1) steps = (steps[0].match(/[^.!?]+[.!?]+(\s|$)/g) || [steps[0]]).map(cleanStep).filter(Boolean);
-    if (!ing.length) ing = [/^leftover/i.test(d.meal) ? 'Leftovers: see the cook day for the ingredient list.' : 'No ingredients logged.'];
-    $('modal-recipe-ingredients').innerHTML = ing.map(function (x) { return '<li>• ' + esc(x) + '</li>'; }).join('');
-    $('modal-recipe-steps').innerHTML = (steps.length ? steps : ['No directions logged.']).map(function (x) { return '<li>' + esc(x) + '</li>'; }).join('');
+    var note = '';
+    if (scaled.length && scale > 1.01) note = '<div class="scale-note">Original recipe serves <b>' + esc(servings) + '</b>. Scaled <b>×' + scale + '</b> to serve <b>6</b> (two dinners). Quantities written inside the steps are from the original recipe.</div>';
+    else if (scaled.length && servings) note = '<div class="scale-note">Made as written. Serves <b>' + esc(servings) + '</b>.</div>';
+    if (scaled.length && source) note += '<div class="hint">Source: ' + esc(source) + '</div>';
+    $('modal-recipe-note').innerHTML = note;
+    drawIngredients(scale > 1.01 && orig.length);
+    var noSteps = isLeft ? ['Reheat and enjoy. The recipe is on the cook day.'] : ['No directions logged.'];
+    $('modal-recipe-steps').innerHTML = (steps.length ? steps : noSteps).map(function (x) { return '<li>' + esc(x) + '</li>'; }).join('');
     openModal('recipe-modal');
 }
+function drawIngredients(canToggle) {
+    var list = RV.view === 'orig' ? RV.orig : RV.scaled;
+    if (!list.length) list = [/leftover/i.test($('modal-recipe-title').textContent) ? 'Leftovers: see the cook day for the ingredient list.' : 'No ingredients logged.'];
+    $('modal-recipe-toggle').innerHTML = canToggle
+        ? '<button class="btn' + (RV.view === 'scaled' ? ' on' : '') + '" onclick="setIngView(\'scaled\')">Scaled</button><button class="btn' + (RV.view === 'orig' ? ' on' : '') + '" onclick="setIngView(\'orig\')">Original</button>' : '';
+    $('modal-recipe-ingredients').innerHTML = list.map(function (x) { return '<li' + (RV.view === 'orig' ? ' class="ing-orig"' : '') + '>• ' + esc(x) + '</li>'; }).join('');
+}
+function setIngView(v) { RV.view = v; drawIngredients(true); }
 
 /* ---------- grocery planner ---------- */
 function defaultGW() {
@@ -325,16 +361,16 @@ document.addEventListener('change', function (e) {
 // backup so recipe cards open on every iPad (opening twice is harmless)
 document.addEventListener('click', function (e) {
     var m = e.target.closest ? e.target.closest('.meal-section') : null;
-    if (m && m.dataset.i !== undefined && D) viewRecipeModal(Number(m.dataset.i));
+    if (m && m.dataset.i !== undefined && D) cardTap(Number(m.dataset.i));
 });
 
 /* ---------- Change of Plans ---------- */
-function openPlans() {
+function openPlans(pre) {
     if (!canEdit()) return;
     var w = W();
     if (!w.planned) { alert('There is no plan for that week yet. Use "Plan a Week" first.'); return; }
     var opts = w.days.map(function (d, i) { return '<option value="' + i + '">' + esc(d.day) + '</option>'; }).join('');
-    var ti = Math.max(0, dowOf(D.today));
+    var ti = (pre !== undefined && pre !== null && !isNaN(pre)) ? pre : Math.max(0, dowOf(D.today));
     $('plans-modal').firstElementChild.innerHTML = '<button class="modal-close" onclick="closeModal(\'plans-modal\')">❌ Close</button>'
         + '<h2 class="modal-header-text">🔄 Change of Plans</h2><p class="hint">Changing: <b>' + (WK === 'cur' ? 'This week' : 'Next week') + '</b></p><p style="color:var(--muted)">Which day?</p>'
         + '<select id="plan-day" class="task-text-field" style="margin-bottom:15px">' + opts + '</select>'
@@ -379,13 +415,13 @@ function renderPickList() {
     var list = (RECIPES || []).filter(function (r) { return !q || (r.name + ' ' + r.type).toLowerCase().indexOf(q) !== -1; });
     $('pick-list').innerHTML = list.length ? list.map(function (r) {
         return '<button class="btn-block mode-btn" data-name="' + esc(r.name) + '" data-type="' + esc(r.type) + '" onclick="pickRecipe(this)" style="text-align:left;font-size:1.25rem">'
-            + esc(r.name) + ' <span style="color:var(--muted);font-size:.9rem">' + esc(r.type) + (r.days < 999 ? ' · cooked ' + r.days + 'd ago' : '') + '</span></button>';
+            + esc(r.name) + (r.flagged ? ' ⚠️' : '') + ' <span style="color:var(--muted);font-size:.9rem">' + esc(r.type) + (r.servings ? ' · serves ' + r.servings : '') + (r.noDetails ? ' · no details yet' : '') + (r.days < 999 ? ' · cooked ' + r.days + 'd ago' : '') + '</span></button>';
     }).join('') : '<p>No recipes match.</p>';
 }
 function pickRecipe(btn) {
     var st = $('pick-status');
     st.textContent = '✨ Setting up ' + btn.dataset.name + '…';
-    api({ action: 'setRecipe', week: WK, day: +$('pick-day').value, name: btn.dataset.name, type: btn.dataset.type }).then(function (p) {
+    api({ action: 'setRecipe', week: WK, day: +$('pick-day').value, name: btn.dataset.name }).then(function (p) {
         if (p.error) { st.textContent = p.error; return; }
         apply(p); RECIPES = null; closeModal('picker-modal');
         if (p.warning) alert(p.warning);
@@ -437,9 +473,11 @@ function openSettings() {
             + '<p class="hint">Switch it on once Eid is announced. It turns itself off at midnight.</p>' : '')
         + '<h4>👀 Preview a design</h4><select id="pv" class="task-text-field" onchange="setPreview(this.value)">' + pv + '</select>'
         + '<p class="hint">Only on this device, and it resets when you refresh.</p>'
-        + '<h4>📅 Upcoming Islamic dates</h4><div id="upcoming">Loading…</div>';
+        + '<h4>📅 Upcoming Islamic dates</h4><div id="upcoming">Loading…</div>'
+        + (edit ? '<h4>🩺 Diagnostics</h4><div id="diag">Loading…</div>' : '');
     if (edit) $('hj-adj').value = String(s.hijriAdjust);
     openModal('settings-modal');
+    if (edit) loadDiag();
     api({ action: 'upcoming' }).then(function (r) {
         var u = r.upcoming || [];
         $('upcoming').innerHTML = u.length ? u.map(function (x) {
@@ -478,6 +516,162 @@ function saveNanny() {
         $('nanny-text-input').value = ''; btn.textContent = '✅ Saved'; renderNannyLog(p.entries);
     }).catch(function () { btn.textContent = '⚠️ Not saved, try again'; });
     setTimeout(function () { btn.textContent = '💾 Save to Log'; }, 2500);
+}
+
+
+/* ---------- status line (parents) ---------- */
+function renderStatus() {
+    var el = $('status-line'), st = D && D.status;
+    if (!canEdit() || !st) { el.textContent = ''; el.className = ''; return; }
+    var bad = false, text;
+    if (!st.triggerOn) { bad = true; text = '⚠️ Auto-plan is off. Turn it on from the sheet menu: ⏰ Turn On Friday 6pm Auto-Plan.'; }
+    else if (st.lastError && (!st.lastOk || st.lastError.at > st.lastOk)) { bad = true; text = '⚠️ Last auto-plan failed ' + st.lastError.at + ': ' + st.lastError.msg; }
+    else if (st.lastOk) text = '✅ Last auto-plan: ' + st.lastOk;
+    else text = '⏰ Auto-plan is on. It runs Friday from 6pm.';
+    el.textContent = text; el.className = bad ? 'warn' : '';
+}
+
+/* ---------- diagnostics (parents) ---------- */
+function loadDiag() {
+    api({ action: 'diag' }).then(function (r) {
+        var d = r.diag, line = function (label, o) {
+            return '<div class="diag-line">' + label + ': ' + (!o ? '<span>not used yet</span>' : o.ok ? '<span class="diag-ok">✅ OK ' + esc(o.at) + '</span>' : '<span class="diag-bad">❌ ' + esc(o.at) + ' ' + esc(o.error || '') + '</span>') + '</div>';
+        };
+        $('diag').innerHTML = '<div class="field"><label>Gemini model</label><div class="field-row"><input id="model-input" value="' + esc(d.model) + '"><button class="btn" onclick="saveModel()">Save</button><button class="btn" onclick="testGemini()">Test</button></div></div>'
+            + '<p id="diag-msg" class="hint"></p>' + line('Gemini', d.gemini) + line('Prayer times', d.prayer) + line('Hijri calendar', d.hijri)
+            + '<div class="diag-line">Auto-plan trigger: ' + (d.triggerOn ? '<span class="diag-ok">✅ on</span>' : '<span class="diag-bad">❌ off</span>') + '</div>';
+    }).catch(function () { $('diag').textContent = 'Not available right now.'; });
+}
+function saveModel() { act({ action: 'setModel', model: $('model-input').value.trim() }).then(function () { $('diag-msg').textContent = 'Saved. Tap Test to check it.'; }); }
+function testGemini() {
+    $('diag-msg').textContent = 'Testing…';
+    api({ action: 'testGemini' }).then(function (r) { $('diag-msg').textContent = r.ok ? '✅ ' + r.model + ' answered.' : '❌ ' + r.model + ': ' + r.error; loadDiagKeepMsg(); });
+}
+function loadDiagKeepMsg() { var m = $('diag-msg').textContent; loadDiag(); setTimeout(function () { if ($('diag-msg')) $('diag-msg').textContent = m; }, 600); }
+
+/* ---------- Recipes: list, add, edit, import (parents) ---------- */
+var DRAFT = null, RL = [];
+function openRecipes() {
+    if (!canEdit()) return;
+    $('recipes-modal').firstElementChild.innerHTML = '<button class="modal-close" onclick="closeModal(\'recipes-modal\')">❌ Close</button><h2 class="modal-header-text">📖 Recipes</h2>'
+        + '<div class="field-row"><button class="btn" onclick="newRecipe()">➕ Add recipe</button><button class="btn" id="imp-btn" onclick="importAll()">📥 Import details</button></div>'
+        + '<p id="imp-msg" class="hint"></p><input id="rl-search" class="task-text-field" placeholder="Search…" style="margin:8px 0"><div id="rl-list">Loading…</div>';
+    $('rl-search').addEventListener('input', drawRecipeList);
+    openModal('recipes-modal');
+    loadRecipeList();
+}
+function loadRecipeList() { api({ action: 'recipeList' }).then(function (r) { RL = r.recipes || []; drawRecipeList(); }).catch(function () { $('rl-list').textContent = 'Could not load recipes.'; }); }
+function drawRecipeList() {
+    var q = ($('rl-search') ? $('rl-search').value : '').trim().toLowerCase(), box = $('rl-list');
+    var list = RL.filter(function (r) { return !q || (r.name + ' ' + r.type).toLowerCase().indexOf(q) !== -1; });
+    box.innerHTML = list.length ? list.map(function (r) {
+        return '<button class="mgr-row" data-name="' + esc(r.name) + '" onclick="editRecipe(this)"><span class="grow">' + esc(r.name) + (r.flagged ? ' ⚠️' : '') + '<br><small>' + esc(r.type || 'no type')
+            + (r.servings ? ' · serves ' + r.servings : '') + (r.unreadable ? ' · could not be read: open it and paste the text' : (r.hasDetails ? '' : ' · no details yet')) + '</small></span></button>';
+    }).join('') : '<p>No recipes match.</p>';
+}
+function importAll() {
+    var btn = $('imp-btn'), msg = $('imp-msg'), done = 0, failed = [];
+    btn.disabled = true; msg.textContent = 'Reading your recipe links… this can take a few minutes.';
+    (function step() {
+        api({ action: 'importBatch' }).then(function (r) {
+            done += r.done || 0; failed = failed.concat(r.failed || []);
+            msg.textContent = 'Imported ' + done + ' so far' + (r.remaining ? ', ' + r.remaining + ' to go…' : '.');
+            if (r.remaining > 0 && (r.done || (r.failed || []).length)) step();
+            else {
+                btn.disabled = false; loadRecipeList();
+                msg.textContent = 'Imported ' + done + ' recipe(s).' + (failed.length ? ' Could not read: ' + failed.join('; ') + '. Open those and paste the recipe text.' : '') + ' Please review any marked ⚠️.';
+            }
+        }).catch(function () { btn.disabled = false; msg.textContent = 'Stopped (connection problem). Tap Import again to continue.'; });
+    })();
+}
+function newRecipe() {
+    DRAFT = null;
+    $('editor-modal').firstElementChild.innerHTML = '<button class="modal-close" onclick="closeModal(\'editor-modal\')">❌ Close</button><h2 class="modal-header-text">➕ Add a recipe</h2>'
+        + '<div class="field"><label>Recipe link</label><input id="ed-url" placeholder="https://… (the original recipe site, not the Pinterest pin)"></div>'
+        + '<div class="field"><label>Name (optional)</label><input id="ed-name0" placeholder="Leave empty to use the recipe\'s own name"></div>'
+        + '<div id="paste-box" style="display:none"><p class="hint">That page could not be read. Open the recipe, copy its text, and paste it here:</p><div class="field"><textarea id="ed-paste" rows="7" placeholder="Paste the recipe text…"></textarea></div></div>'
+        + '<button class="btn-block mode-btn highlight" id="ed-read" onclick="readRecipe()">🔎 Read the recipe</button><p id="ed-msg" class="hint"></p>'
+        + '<p class="hint">You will review it before anything is saved.</p>';
+    openModal('editor-modal');
+}
+function readRecipe() {
+    var url = $('ed-url').value.trim(), text = $('ed-paste') ? $('ed-paste').value.trim() : '', name = $('ed-name0').value.trim(), msg = $('ed-msg');
+    if (!url && !text) { msg.textContent = 'Paste a link (or the recipe text).'; return; }
+    msg.textContent = '🔎 Reading… this can take up to a minute.'; $('ed-read').disabled = true;
+    api({ action: 'recipePreview', url: url, text: text, name: name }).then(function (r) {
+        $('ed-read').disabled = false;
+        if (r.error) {
+            $('paste-box').style.display = 'block';
+            msg.textContent = r.error === 'blocked' ? 'That site would not let the app read it.' : r.error === 'noread' ? 'No recipe was found on that page.' : r.error === 'nolink' ? 'That does not look like a web link.' : r.error;
+            return;
+        }
+        DRAFT = r.draft; drawEditor();
+    }).catch(function () { $('ed-read').disabled = false; msg.textContent = 'Something went wrong. Try again.'; });
+}
+function editRecipe(btn) {
+    api({ action: 'recipeGet', name: btn.dataset.name }).then(function (r) {
+        if (r.error) { alert(r.error); return; }
+        DRAFT = r.recipe; DRAFT.original = true;
+        if (!DRAFT.ingredients.length) { newRecipe(); $('ed-url').value = DRAFT.url || ''; $('ed-name0').value = DRAFT.name || ''; return; }
+        drawEditor(); openModal('editor-modal');
+    });
+}
+function drawEditor() {
+    var d = DRAFT, types = {};
+    RL.forEach(function (r) { if (r.type) types[r.type] = true; });
+    if (d.type) types[d.type] = true;
+    var flags = (d.flags || []).map(function (f, i) {
+        var done = f.decision === 'sub';
+        return '<div class="flag-card' + (done ? ' ok' : '') + '"><b>⚠️ ' + esc(f.note) + '</b><br>Original: <i>' + esc(f.line) + '</i><br>Suggested: <i>' + esc(f.subLine) + '</i><br>'
+            + (done ? '✅ Substitute is being used. <button class="btn" onclick="flagDecide(' + i + ',\'keep\')">Use the original instead</button>'
+                    : '<button class="btn" onclick="flagDecide(' + i + ',\'sub\')">Use the substitute</button><button class="btn" onclick="flagDecide(' + i + ',\'keep\')">Keep the original</button>' + (f.decision === 'keep' ? ' <small>(original kept: the recipe stays marked ⚠️)</small>' : '')) + '</div>';
+    }).join('');
+    $('editor-modal').firstElementChild.innerHTML = '<button class="modal-close" onclick="closeModal(\'editor-modal\')">❌ Close</button><h2 class="modal-header-text">📖 Review recipe</h2>'
+        + '<p class="hint">Source: ' + esc(d.source || 'saved') + (d.assumedServings ? ' · <b>servings were not found: I assumed 4, please check</b>' : '') + '</p>'
+        + (flags ? '<h4>Ingredient check</h4>' + flags : '')
+        + '<div class="field"><label>Name</label><input id="ed-name" value="' + esc(d.name) + '"></div>'
+        + '<div class="field"><label>Link</label><input id="ed-link" value="' + esc(d.url) + '"></div>'
+        + '<div class="field-row"><div class="field"><label>Type</label><input id="ed-type" list="ed-types" value="' + esc(d.type) + '"><datalist id="ed-types">' + Object.keys(types).map(function (t) { return '<option value="' + esc(t) + '">'; }).join('') + '</datalist></div>'
+        + '<div class="field"><label>Servings</label><input id="ed-serv" type="number" min="1" value="' + esc(d.servings) + '"></div>'
+        + '<div class="field"><label>Minutes</label><input id="ed-min" type="number" min="0" value="' + esc(d.minutes) + '"></div>'
+        + '<div class="field"><label>Cal / serving ≈</label><input id="ed-cal" type="number" min="0" value="' + esc(d.calories) + '"></div></div>'
+        + '<div class="field"><label>Ingredients (one per line, exactly as in the recipe)</label><textarea id="ed-ing" rows="9">' + esc((d.ingredients || []).join('\n')) + '</textarea></div>'
+        + '<div class="field"><label>Steps (one per line)</label><textarea id="ed-steps" rows="9">' + esc((d.steps || []).join('\n')) + '</textarea></div>'
+        + '<button class="btn-block mode-btn highlight" onclick="saveRecipeDraft()">💾 Save recipe</button><p id="ed-msg" class="hint"></p>'
+        + (d.original ? '<button class="btn-block mode-btn" onclick="deleteRecipeDraft()">🗑️ Delete this recipe</button>' : '');
+    openModal('editor-modal');
+}
+function syncDraft() {
+    if (!$('ed-name') || !$('ed-ing')) return;
+    DRAFT.name = $('ed-name').value.trim(); DRAFT.url = $('ed-link').value.trim(); DRAFT.type = $('ed-type').value.trim();
+    DRAFT.servings = Number($('ed-serv').value) || 0; DRAFT.minutes = Number($('ed-min').value) || 0; DRAFT.calories = Number($('ed-cal').value) || 0;
+    var ing = $('ed-ing').value.split('\n').map(function (x) { return x.trim(); }).filter(Boolean);
+    var stp = $('ed-steps').value.split('\n').map(function (x) { return x.trim(); }).filter(Boolean);
+    if (ing.length || !DRAFT.ingredients || !DRAFT.ingredients.length) DRAFT.ingredients = ing;
+    if (stp.length || !DRAFT.steps || !DRAFT.steps.length) DRAFT.steps = stp;
+    if (DRAFT.servings) DRAFT.assumedServings = false;
+}
+function flagDecide(i, dec) {
+    syncDraft();
+    var f = DRAFT.flags[i], cur = f.decision === 'sub' ? f.subLine : f.line, next = dec === 'sub' ? f.subLine : f.line, idx = DRAFT.ingredients.indexOf(cur);
+    if (idx >= 0) DRAFT.ingredients[idx] = next;
+    f.decision = dec;
+    drawEditor();
+}
+function saveRecipeDraft() {
+    syncDraft();
+    var msg = $('ed-msg');
+    if (!DRAFT.name) { msg.textContent = 'Please give the recipe a name.'; return; }
+    if (!DRAFT.ingredients.length) { msg.textContent = 'The recipe needs ingredients.'; return; }
+    msg.textContent = 'Saving…';
+    api({ action: 'recipeSave', draft: DRAFT }).then(function (r) {
+        if (r.error) { msg.textContent = r.error; return; }
+        RECIPES = null; closeModal('editor-modal'); openRecipes();
+    }).catch(function () { msg.textContent = 'Not saved. Try again.'; });
+}
+function deleteRecipeDraft() {
+    if (!confirm('Delete "' + DRAFT.name + '" from your recipes?')) return;
+    api({ action: 'recipeDelete', name: DRAFT.name }).then(function () { RECIPES = null; closeModal('editor-modal'); openRecipes(); });
 }
 
 /* ---------- modals ---------- */
