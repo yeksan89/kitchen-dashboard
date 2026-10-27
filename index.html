@@ -3,10 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="apple-mobile-web-app-title" content="Elham’s Kitchen">
     <title>Elham’s Kitchen</title>
-    <link rel="stylesheet" href="style.css?v=4">
+    <link rel="stylesheet" href="style.css?v=6">
 </head>
 <body>
+    <div id="deco" aria-hidden="true"></div>
+    <div id="calli-bg" dir="rtl" lang="ar" aria-hidden="true"></div>
     <header>
         <h1>🍳 ELHAM’S KITCHEN</h1>
         <p id="current-date">Loading...</p>
@@ -108,6 +111,15 @@
         </div>
     </div>
 
-    <script src="script.js?v=5"></script>
+    <div id="watch">
+        <div id="w-tabs">
+            <button type="button" id="w-t-today" onclick="setWTab('today')">Today</button>
+            <button type="button" id="w-t-tomorrow" onclick="setWTab('tomorrow')">Tomorrow</button>
+            <button type="button" id="w-t-shop" onclick="setWTab('shop')">🛒</button>
+        </div>
+        <div id="w-body"></div>
+    </div>
+
+    <script src="script.js?v=6"></script>
 </body>
 </html>
