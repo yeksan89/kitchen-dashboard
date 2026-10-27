@@ -7,7 +7,7 @@ window.addEventListener('error', function (e) {
 });
 
 // Your Apps Script web app address (ends in /exec). Nothing secret lives in this file: the PIN is typed on each device.
-const API_URL = "hhttps://script.google.com/macros/s/AKfycbyAOfM98QFtmQygFFzffBn4p4pSzaz80ykCFbitHeE0hcyYUkXadNpC2zkSUjo7-7us/exec";
+const API_URL = "https://script.google.com/macros/s/AKfycbyAOfM98QFtmQygFFzffBn4p4pSzaz80ykCFbitHeE0hcyYUkXadNpC2zkSUjo7-7us/exec";
 
 const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -90,6 +90,7 @@ function submitPin() {
 function apply(p) {
     if (p.error) {
         if (!D) $('calendar').innerHTML = '<div class="loading-state" style="color:#c2493d">' + esc(p.error) + '</div>';
+        else staleNote(p.error);
         return p;
     }
     D = p;
@@ -101,7 +102,14 @@ function refresh() {
     if (!PIN) { showGate(); return Promise.resolve(); }
     return api({ action: 'get' }).then(apply).catch(function (e) {
         if (!D) $('calendar').innerHTML = '<div class="loading-state" style="color:#c2493d">Could not reach the kitchen database: ' + esc(e.message) + '</div>';
+        else staleNote(e.message);
     });
+}
+function staleNote(msg) {
+    var el = $('status-line');
+    if (!el) return;
+    el.textContent = '⚠️ Showing the last saved copy. Could not refresh: ' + msg;
+    el.className = 'warn';
 }
 function act(body) { return api(body).then(function (p) { if (p.error) { alert(p.error); return p; } return apply(p); }); }
 
