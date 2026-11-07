@@ -7,7 +7,7 @@ window.addEventListener('error', function (e) {
 });
 
 // Your Apps Script web app address (ends in /exec). Nothing secret lives in this file: the PIN is typed on each device.
-const API_URL = "https://script.google.com/macros/s/AKfycbwZcScBlJzSTTtdwHTReEU02oRt90AyrqpYgN--YXoxT10JA1R1G0YQSLLMg_R4IAS8/exec";
+const API_URL = "https://script.google.com/macros/s/AKfycbxMy_Gyczhg3CPOBH5R12pPRAMmhptl4li9H3DTUopnYW2smGxb_YP4DEkVs55AzN08/exec";
 
 const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -90,6 +90,35 @@ function submitPin() {
     $('pin-gate').classList.remove('active');
     refresh();
 }
+/* ---------- tick queue: ticks are saved on this device first, then sent one by one, and survive a locked screen ---------- */
+var QUEUE = [], FLUSHING = false, FAILS = 0, LAST_ACK = 0;
+try { QUEUE = JSON.parse(lsGet('kd_queue') || '[]'); if (!Array.isArray(QUEUE)) QUEUE = []; } catch (e) { QUEUE = []; }
+function saveQ() { lsSet('kd_queue', JSON.stringify(QUEUE)); }
+function sameOp(a, b) { return a.action === b.action && a.week === b.week && (a.key || a.id) === (b.key || b.id); }
+function queueOp(op) {
+    QUEUE = QUEUE.filter(function (o, i) { return !(i > 0 && sameOp(o, op)); });      // an older unsent tick of the same item is replaced (the first one may be in flight)
+    QUEUE.push(op); saveQ(); flushQ();
+}
+function flushQ() {
+    if (FLUSHING || !QUEUE.length || !PIN) return;
+    FLUSHING = true;
+    var op = QUEUE[0];
+    api(op).then(function () {
+        QUEUE.shift(); saveQ(); FAILS = 0; LAST_ACK = Date.now(); FLUSHING = false; flushQ();
+    }).catch(function () {
+        FLUSHING = false; FAILS++;
+        setTimeout(flushQ, Math.min(60000, 4000 * FAILS));      // no signal or locked: keep the tick and try again soon
+    });
+}
+// put ticks that have not reached the sheet yet on top of whatever the server sent
+function overlayQ() {
+    if (!D) return;
+    QUEUE.forEach(function (o) {
+        if (o.action === 'toggle' && D[o.week]) D[o.week].state.done[o.key] = o.value;
+        else if (o.action === 'have' && D[o.week]) D[o.week].state.have[o.key] = o.value;
+        else if (o.action === 'myToggle') D.my.items.forEach(function (i) { if (i.id === o.id) i.done = o.value; });
+    });
+}
 function apply(p) {
     if (p.error) {
         if (!D) $('calendar').innerHTML = '<div class="loading-state" style="color:#c2493d">' + esc(p.error) + '</div>';
@@ -97,13 +126,18 @@ function apply(p) {
         return p;
     }
     D = p;
-    lsSet('kd_cache', JSON.stringify(p));
+    overlayQ();
+    lsSet('kd_cache', JSON.stringify(D));
     render();
     return p;
 }
 function refresh() {
     if (!PIN) { showGate(); return Promise.resolve(); }
-    return api({ action: 'get' }).then(apply).catch(function (e) {
+    var started = Date.now();
+    return api({ action: 'get' }).then(function (p) {
+        if (!p.error && (FLUSHING || LAST_ACK >= started)) { setTimeout(refresh, 2000); return p; }      // answer could be older than a tick we just saved: ask again
+        return apply(p);
+    }).catch(function (e) {
         if (!D) $('calendar').innerHTML = '<div class="loading-state" style="color:#c2493d">Could not reach the kitchen database: ' + esc(e.message) + '</div>';
         else staleNote(e.message);
     });
@@ -114,7 +148,15 @@ function staleNote(msg) {
     el.textContent = '⚠️ Showing the last saved copy. Could not refresh: ' + msg;
     el.className = 'warn';
 }
-function act(body) { return api(body).then(function (p) { if (p.error) { alert(p.error); return p; } return apply(p); }); }
+function act(body) {
+    var started = Date.now();
+    return api(body).then(function (p) {
+        if (p.error) { alert(p.error); return p; }
+        apply(p);
+        if (FLUSHING || LAST_ACK >= started) setTimeout(refresh, 2500);
+        return p;
+    });
+}
 
 /* ---------- Hijri, special days, themes ---------- */
 function specialFor(h, effDow) {
@@ -245,13 +287,20 @@ function cardHtml(d, i, w) {
         ? '<div class="meta-metrics-row"><span>⏱️ ' + esc(d.cook_time) + 'm</span><span>💰 $' + esc(d.cost) + '</span><span>🔥 ≈' + esc(d.calories) + ' cal/serving</span></div>' : '';
     var isOpen = String(d.meal).indexOf('📌') === 0;
     var warnTag = d.warn ? '<div class="warn-tag">⚠️ Contains ' + esc(d.warn) + '</div>' : '';
+    var leftTag = '';
+    if (d.left) {
+        var fr = d.left.cap - d.left.used;
+        if (d.left.to && d.left.to.length) leftTag += '<div class="left-tag">🍲 Leftovers on ' + esc(d.left.to.join(', ')) + '</div>';
+        if (fr > 0) leftTag += '<div class="left-tag">🍲 ' + fr + ' more dinner' + (fr > 1 ? 's' : '') + ' available' + (edit ? ' · use it in Change of Plans' : '') + '</div>';
+        else if (fr < 0) leftTag += '<div class="left-tag over">⚠️ ' + d.left.used + ' leftover night' + (d.left.used > 1 ? 's' : '') + ' planned, but this makes ' + (d.left.cap + 1) + ' dinners</div>';
+    }
     var openBtn = isOpen ? '<div class="open-night">Nothing planned yet.</div>' + (edit ? '<button class="btn open-btn" onclick="event.stopPropagation();openPlans(' + i + ')">Pick a meal</button>' : '') : '';
     var addTask = edit ? '<div class="add-task-container"><button class="add-task-inline-btn" onclick="toggleTaskInput(this)">+ Add Task</button>'
         + '<div class="task-input-hidden-row" style="display:none;"><input type="text" class="task-text-field"><button onclick="addTask(this, ' + i + ')">➕</button></div></div>' : '';
     return '<div class="day-card' + (isToday ? ' today' : '') + (i === 4 ? ' friday' : '') + (sp ? ' special ' + sp.kind : '') + '" data-day="' + esc(d.day) + '">' + art
         + '<div class="day-name">' + esc(d.day) + (isToday ? ' 📍' : '') + '<small>' + fmtDate(ymd) + (h ? ' · ' + h[0] + ' ' + HIJRI_MONTHS[h[1] - 1] : '') + '</small></div>' + tag
         + '<div class="meal-section" data-i="' + i + '" style="cursor:pointer;" onclick="cardTap(' + i + ')">'
-        + '<span class="cuisine-tag ' + cuisine + '">' + esc(cuisine) + '</span><p class="meal-title">' + esc(isOpen ? 'Open night' : (d.meal || 'No meal planned')) + '</p>' + metrics + warnTag + openBtn + '</div>'
+        + '<span class="cuisine-tag ' + cuisine + '">' + esc(cuisine) + '</span><p class="meal-title">' + esc(isOpen ? 'Open night' : (d.meal || 'No meal planned')) + '</p>' + metrics + warnTag + leftTag + openBtn + '</div>'
         + '<div class="chore-section"><div class="chore-box"><div class="chores-list-sub-container">' + (tasks || '<span class="hint">No chores</span>') + '</div></div>' + addTask + '</div></div>';
 }
 function toggleTaskInput(btn) { var r = btn.nextElementSibling; r.style.display = r.style.display === 'none' ? 'flex' : 'none'; }
@@ -273,7 +322,7 @@ function cardTap(i) {
     viewRecipeModal(i);
 }
 function section(t, name) {
-    var names = ['SERVINGS', 'SCALE', 'SOURCE', 'INGREDIENTS', 'ORIGINAL', 'STEPS'];
+    var names = ['NIGHTS', 'SERVINGS', 'SCALE', 'SOURCE', 'INGREDIENTS', 'ORIGINAL', 'STEPS'];
     var m = new RegExp('(?:^|\\n)' + name + ':\\n?([\\s\\S]*?)(?=\\n(?:' + names.join('|') + '):|$)').exec(t);
     return m ? m[1].trim() : '';
 }
@@ -394,9 +443,9 @@ document.addEventListener('change', function (e) {
     if (!k || !D || !canEdit()) return;
     var on = t.checked, p = k.slice(0, 2), key = k.slice(2), txt = t.closest('label') ? t.closest('label').querySelector('.txt') : null;
     if (txt) txt.className = txt.className.replace(/\s*done/g, '') + (on ? ' done' : '');
-    if (p === 'c:') { W().state.done[k] = on; api({ action: 'toggle', week: WK, key: k, value: on }); }
-    else if (p === 'h:') { D[GWK].state.have[key] = on; refreshQR(); api({ action: 'have', week: GWK, key: key, value: on }); }
-    else if (p === 'm:') { D.my.items.forEach(function (i) { if (i.id === key) i.done = on; }); refreshQR(); api({ action: 'myToggle', id: key, value: on }); }
+    if (p === 'c:') { W().state.done[k] = on; queueOp({ action: 'toggle', week: WK, key: k, value: on }); }
+    else if (p === 'h:') { D[GWK].state.have[key] = on; refreshQR(); queueOp({ action: 'have', week: GWK, key: key, value: on }); }
+    else if (p === 'm:') { D.my.items.forEach(function (i) { if (i.id === key) i.done = on; }); refreshQR(); queueOp({ action: 'myToggle', id: key, value: on }); }
     else if (p === 'o:') { act({ action: 'stapleOut', name: key, value: on }); }
     else if (p === 'b:') { act({ action: 'stapleOut', name: key, value: false }); }
 });
@@ -407,6 +456,9 @@ document.addEventListener('click', function (e) {
 });
 
 /* ---------- Change of Plans ---------- */
+function isCookMeal(m) { m = String(m || '').trim(); return !!m && !/^leftover/i.test(m) && m.indexOf('📌') !== 0 && m.indexOf('🥡') !== 0 && m.indexOf('⏭️') !== 0; }
+function freeDinners(d) { return d && d.left ? d.left.cap - d.left.used : 0; }
+var LO = [];
 function openPlans(pre) {
     if (!canEdit()) return;
     var w = W();
@@ -415,14 +467,68 @@ function openPlans(pre) {
     var ti = (pre !== undefined && pre !== null && !isNaN(pre)) ? pre : Math.max(0, dowOf(D.today));
     $('plans-modal').firstElementChild.innerHTML = '<button class="modal-close" onclick="closeModal(\'plans-modal\')">❌ Close</button>'
         + '<h2 class="modal-header-text">🔄 Change of Plans</h2><p class="hint">Changing: <b>' + (WK === 'cur' ? 'This week' : 'Next week') + '</b></p><p style="color:var(--muted)">Which day?</p>'
-        + '<select id="plan-day" class="task-text-field" style="margin-bottom:15px">' + opts + '</select>'
-        + '<button class="btn-block mode-btn" onclick="plan(\'takeout\')">🥡 Order Takeout</button>'
+        + '<select id="plan-day" class="task-text-field" style="margin-bottom:6px" onchange="planDayChanged()">' + opts + '</select>'
+        + '<p id="plan-now" class="hint"></p>'
+        + '<div class="two-btn"><button class="btn-block mode-btn" onclick="setNight(\'takeout\')">🥡 Takeout</button><button class="btn-block mode-btn" onclick="setNight(\'open\')">📌 Open night</button></div>'
+        + '<h4>🍲 Leftovers</h4><div style="display:flex;gap:8px;margin-bottom:4px"><select id="lo-src" class="task-text-field"></select><button class="btn" id="lo-btn" style="white-space:nowrap" onclick="setNight(\'leftover\')">Use</button></div><p id="lo-hint" class="hint"></p>'
+        + '<div id="nights-box"></div>'
+        + '<button class="btn-block mode-btn" onclick="openPicker()">📖 Pick from My Recipes</button>'
+        + '<button class="btn-block mode-btn highlight" onclick="plan(\'newDish\')">✨ Try Something New</button>'
         + '<button class="btn-block mode-btn" onclick="plan(\'push\')">❄️ Push to Next Week</button>'
         + '<div style="display:flex;gap:8px;margin-bottom:12px"><select id="plan-swap" class="task-text-field">' + opts + '</select><button class="btn" style="white-space:nowrap" onclick="plan(\'swap\')">🔀 Swap with this day</button></div>'
-        + '<button class="btn-block mode-btn" onclick="openPicker()">📖 Pick from My Recipes</button>'
-        + '<button class="btn-block mode-btn highlight" onclick="plan(\'newDish\')">✨ Try Something New</button><p id="plan-status" class="hint"></p>';
+        + '<p id="plan-status" class="hint"></p>';
     $('plan-day').value = ti; $('plan-swap').value = Math.min(ti + 1, 6);
+    planDayChanged();
     openModal('plans-modal');
+}
+// cooked nights earlier in the week (and, on next week, the end of this week) that leftovers can come from
+function leftSources(idx) {
+    var out = [], days = W().days;
+    var label = function (d, pre) { var f = freeDinners(d); return pre + d.day + ' – ' + d.meal + (f > 0 ? ' (' + f + ' left)' : ' (all used)'); };
+    for (var j = 0; j < idx; j++) if (isCookMeal(days[j].meal)) out.push({ j: j, prev: false, gap: idx - j, d: days[j], label: label(days[j], '') });
+    if (WK === 'next') for (var k = 0; k < 7; k++) {
+        var c = D.cur.days[k], gap = 7 - k + idx;
+        if (gap <= 5 && isCookMeal(c.meal)) out.push({ j: k, prev: true, gap: gap, d: c, label: label(c, 'Last ') });
+    }
+    return out;
+}
+function planDayChanged() {
+    var idx = +$('plan-day').value, d = W().days[idx], sel = $('lo-src');
+    LO = leftSources(idx);
+    sel.innerHTML = LO.map(function (o, k) { return '<option value="' + k + '">' + esc(o.label) + '</option>'; }).join('');
+    sel.disabled = $('lo-btn').disabled = !LO.length;
+    for (var q = 0; q < LO.length; q++) if (freeDinners(LO[q].d) > 0) { sel.value = q; break; }      // start on a night that still has dinners left
+    $('lo-hint').textContent = LO.length ? 'Leftovers have to come after the night they were cooked.' : 'There is no cooked dinner before this day to take leftovers from.';
+    $('plan-now').innerHTML = 'Now: <b>' + esc(String(d.meal).indexOf('📌') === 0 ? 'Open night' : d.meal) + '</b>';
+    $('nights-box').innerHTML = d.left ? '<h4>🍲 Dinners this recipe makes</h4><div class="opt-row"><select id="plan-nights" class="task-text-field" style="width:auto" onchange="setNights()">'
+        + [1, 2, 3].map(function (n) { return '<option value="' + n + '"' + (n === d.left.cap + 1 ? ' selected' : '') + '>' + n + '</option>'; }).join('')
+        + '</select><span class="hint" style="margin:0">' + d.left.used + ' used for leftovers. Change this if the servings estimate is off.</span></div>' : '';
+}
+function setNights() {
+    var idx = +$('plan-day').value, st = $('plan-status');
+    st.textContent = 'Updating…';
+    act({ action: 'setNights', week: WK, day: idx, n: +$('plan-nights').value }).then(function (p) {
+        if (p && !p.error) { st.textContent = 'Saved.'; planDayChanged(); }
+    }).catch(function () { st.textContent = 'Something went wrong. Try again.'; });
+}
+// mode: 'open' | 'takeout' | 'leftover'. Warns about what it would replace, then lets you decide.
+function setNight(mode) {
+    var idx = +$('plan-day').value, d = W().days[idx], st = $('plan-status'), warn = [];
+    var body = { action: 'setNight', week: WK, day: idx, mode: mode };
+    if (isCookMeal(d.meal)) warn.push(d.day + ' has "' + d.meal + '" now. Replacing it takes its groceries off the list' + (d.left && d.left.used ? (d.left.used > 1 ? ' and its ' + d.left.used + ' leftover nights become open nights' : ' and its leftover night becomes an open night') : '') + '.');
+    if (mode === 'leftover') {
+        var o = LO[+$('lo-src').value];
+        if (!o) return;
+        body.from = o.j; body.fromPrev = o.prev;
+        if (freeDinners(o.d) <= 0) warn.push('"' + o.d.meal + '" makes ' + (o.d.left.cap + 1) + ' dinner' + (o.d.left.cap ? 's' : '') + ' and they are all planned already. (If the servings estimate is off, change it under "Dinners this recipe makes".)');
+        if (o.gap > 3) warn.push('That is ' + o.gap + ' days after it was cooked. Leftovers are best eaten within about 3 days.');
+    }
+    if (warn.length && !confirm(warn.join('\n\n') + '\n\nContinue?')) return;
+    st.textContent = 'Updating…';
+    api(body).then(function (p) {
+        if (p.error) { st.textContent = p.error; return; }
+        apply(p); closeModal('plans-modal');
+    }).catch(function () { st.textContent = 'Something went wrong. Try again.'; });
 }
 function plan(action) {
     var day = +$('plan-day').value, b = +$('plan-swap').value, st = $('plan-status');
@@ -431,6 +537,33 @@ function plan(action) {
     api({ action: action, week: WK, day: day, a: day, b: b }).then(function (p) {
         if (p.error) { st.textContent = p.error; return; }
         apply(p); closeModal('plans-modal');
+        if (action === 'newDish') leftoverPrompt(WK, day);
+    }).catch(function () { st.textContent = 'Something went wrong. Try again.'; });
+}
+
+/* ---------- after cooking something new: offer the extra dinner(s) ---------- */
+var LP = { wk: 'cur', idx: 0, opts: [] };
+function leftoverPrompt(wk, idx) {
+    var d = D[wk] && D[wk].days[idx];
+    if (!canEdit() || !d || freeDinners(d) <= 0) { closeModal('leftover-modal'); return; }
+    var opts = [], nm = function (x) { return x && x.meal ? (/^leftover/i.test(x.meal) ? ' · already leftovers' : String(x.meal).indexOf('📌') === 0 ? ' · open night' : isCookMeal(x.meal) ? ' · has ' + x.meal : '') : ' · not planned yet'; };
+    for (var j = idx + 1; j <= 6 && j - idx <= 3; j++) opts.push({ wk: wk, day: j, prev: false, text: D[wk].days[j].day + nm(D[wk].days[j]) });
+    if (wk === 'cur') for (var m = 0; m <= 6 && 7 - idx + m <= 3; m++) opts.push({ wk: 'next', day: m, prev: true, text: D.next.days[m].day + ' (next week)' + nm(D.next.days[m]) });
+    LP = { wk: wk, idx: idx, opts: opts };
+    var fr = freeDinners(d);
+    $('leftover-modal').firstElementChild.innerHTML = '<button class="modal-close" onclick="closeModal(\'leftover-modal\')">❌ Close</button><h2 class="modal-header-text">🍲 Use the extra dinner?</h2>'
+        + '<p><b>' + esc(d.meal) + '</b> makes ' + (d.left.cap + 1) + ' dinners. ' + fr + ' more can be eaten as leftovers. Which night?</p>'
+        + (opts.length ? opts.map(function (o, k) { return '<button class="btn-block mode-btn" onclick="lpPick(' + k + ')">' + esc(o.text) + '</button>'; }).join('') : '<p class="hint">No night in the next 3 days. You can set one later in Change of Plans.</p>')
+        + '<button class="btn-block mode-btn" onclick="closeModal(\'leftover-modal\')">Not now</button><p id="lp-status" class="hint"></p>';
+    openModal('leftover-modal');
+}
+function lpPick(k) {
+    var o = LP.opts[k], t = D[o.wk].days[o.day], st = $('lp-status');
+    if (isCookMeal(t.meal) && !confirm(t.day + ' has "' + t.meal + '". Replace it with leftovers? Its groceries come off the list.')) return;
+    st.textContent = 'Updating…';
+    api({ action: 'setNight', week: o.wk, day: o.day, mode: 'leftover', from: LP.idx, fromPrev: o.prev }).then(function (p) {
+        if (p.error) { st.textContent = p.error; return; }
+        apply(p); leftoverPrompt(LP.wk, LP.idx);
     }).catch(function () { st.textContent = 'Something went wrong. Try again.'; });
 }
 function openPicker() {
@@ -463,10 +596,12 @@ function renderPickList() {
 function pickRecipe(btn) {
     var st = $('pick-status');
     st.textContent = '✨ Setting up ' + btn.dataset.name + '…';
-    api({ action: 'setRecipe', week: WK, day: +$('pick-day').value, name: btn.dataset.name }).then(function (p) {
+    var pday = +$('pick-day').value;
+    api({ action: 'setRecipe', week: WK, day: pday, name: btn.dataset.name }).then(function (p) {
         if (p.error) { st.textContent = p.error; return; }
         apply(p); RECIPES = null; closeModal('picker-modal');
         if (p.warning) alert(p.warning);
+        leftoverPrompt(WK, pday);
     }).catch(function () { st.textContent = 'Something went wrong. Try again.'; });
 }
 
@@ -767,9 +902,9 @@ document.addEventListener('click', function (e) {
     if (!r || !D || !canEdit()) return;
     var on = !/\bon\b/.test(r.className), k = r.getAttribute('data-k'), t = r.getAttribute('data-t');
     r.className = 'w-item' + (on ? ' on' : '');
-    if (t === 'm') { D.my.items.forEach(function (i) { if (i.id === k) i.done = on; }); api({ action: 'myToggle', id: k, value: on }); }
+    if (t === 'm') { D.my.items.forEach(function (i) { if (i.id === k) i.done = on; }); queueOp({ action: 'myToggle', id: k, value: on }); }
     else if (r.getAttribute('data-s')) { api({ action: 'stapleOut', name: k, value: !on }).then(apply); }
-    else { var wk = r.getAttribute('data-w'); D[wk].state.have[k] = on; api({ action: 'have', week: wk, key: k, value: on }); }
+    else { var wk = r.getAttribute('data-w'); D[wk].state.have[k] = on; queueOp({ action: 'have', week: wk, key: k, value: on }); }
 });
 
 /* ---------- modals ---------- */
@@ -790,11 +925,14 @@ setInterval(function () {                       // keep phone and iPad in sync
     refresh();
 }, 180000);
 document.addEventListener('visibilitychange', function () {
+    if (!document.hidden) flushQ();
     if (!document.hidden && PIN && D && !document.querySelector('.modal-overlay.active')) refresh();
 });
+window.addEventListener('online', flushQ);
 (function boot() {
     if (!PIN) { showGate(); return; }
+    flushQ();
     var c = lsGet('kd_cache');
-    if (c) { try { D = JSON.parse(c); render(); } catch (e) { D = null; } }     // show the last plan instantly while it refreshes
+    if (c) { try { D = JSON.parse(c); overlayQ(); render(); } catch (e) { D = null; } }     // show the last plan instantly while it refreshes
     refresh();
 })();
